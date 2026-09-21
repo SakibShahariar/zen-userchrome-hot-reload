@@ -1,0 +1,35 @@
+{
+  "id": "zen-userchrome-hot-reload",
+  "name": "Zen UserChrome & Content Hot Reload",
+  "description": "Watches the profile chrome CSS and hot-reloads userChrome.css / userContent.css live on save, so Matugen or editor changes apply without restarting the browser.",
+  "homepage": "https://github.com/SakibShahariar/zen-userchrome-hot-reload",
+  "readme": "https://raw.githubusercontent.com/SakibShahariar/zen-userchrome-hot-reload/main/README.md",
+  "author": "sakib",
+  "version": "1.0.0",
+  "tags": [
+    "Developer",
+    "Hot-Reload",
+    "Matugen",
+    "Customization",
+    "Productivity"
+  ],
+  "scripts": {
+    "userchrome-hot-reload.uc.js": {
+      "name": "UserChrome & Content Hot Reload",
+      "description": "Watches and hot-reloads userChrome.css / userContent.css live on disk changes",
+      "include": [
+        "chrome://browser/content/browser.xhtml"
+      ]
+    }
+  },
+  "preferences": "preferences.json",
+  "style": {
+    "chrome": "",
+    "content": ""
+  },
+  "fork": [
+    "zen"
+  ],
+  "createdAt": "2026-09-21",
+  "updatedAt": "2026-09-21"
+}
