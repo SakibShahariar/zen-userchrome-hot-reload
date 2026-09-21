@@ -18,6 +18,20 @@
 
   const profileChromeDir = PathUtils.join(PathUtils.profileDir, "chrome");
   const chromeEntryPath = PathUtils.join(profileChromeDir, "userChrome.css");
+  const contentEntryPath = PathUtils.join(profileChromeDir, "userContent.css");
+  const contentOutPath = PathUtils.join(
+    profileChromeDir,
+    "sine-mods",
+    "zen-userchrome-hot-reload",
+    "generated",
+    "content.css"
+  );
+
+  const ACTOR_NAME = "UserChromeHotReload";
+  const ACTOR_MODULE =
+    "chrome://sine/content/zen-userchrome-hot-reload/hot-reload-content.sys.mjs";
+  const REBUILD_MESSAGE = "UserChromeHotReload:RebuildUserStyles";
+  const MAX_IMPORT_DEPTH = 8;
 
   let lastModifiedTimes = new Map();
   let pendingReload = null;
@@ -157,28 +171,94 @@
     Services.obs.notifyObservers(null, "chrome-flush-caches", null);
   }
 
-  function reloadContentPages() {
-    Services.obs.notifyObservers(null, "chrome-flush-caches", null);
-    let reloaded = 0;
+  function stripImports(css) {
+    return css.replace(
+      /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?\s*[^;]*;/gi,
+      (match, ref) => `\n/* inlined: ${ref} */\n`
+    );
+  }
+
+  function importRefs(css) {
+    const refs = [];
+    const re =
+      /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?\s*[^;]*;/gi;
+    let match;
+    while ((match = re.exec(css))) {
+      refs.push(match[1]);
+    }
+    return refs;
+  }
+
+  function resolveRef(ref, fromFile) {
+    if (/^[a-z]+:\/\//i.test(ref) || ref.startsWith("data:")) {
+      return null;
+    }
+    if (ref.startsWith("/")) {
+      return ref;
+    }
+    return PathUtils.join(PathUtils.parent(fromFile), ref);
+  }
+
+  async function inlineImports(filePath, seen, depth) {
+    if (depth > MAX_IMPORT_DEPTH || seen.has(filePath)) {
+      return "";
+    }
+    seen.add(filePath);
+    let css;
+    try {
+      css = await IOUtils.readUTF8(filePath);
+    } catch (e) {
+      return "";
+    }
+    const refs = importRefs(css);
+    const body = stripImports(css);
+    let inlined = "";
+    for (const ref of refs) {
+      const resolved = resolveRef(ref, filePath);
+      if (!resolved) {
+        continue;
+      }
+      inlined += await inlineImports(resolved, seen, depth + 1);
+    }
+    return `${body}\n${inlined}`;
+  }
+
+  async function buildContentCss() {
+    let combined = "";
+    if (await IOUtils.exists(contentEntryPath)) {
+      combined = await inlineImports(contentEntryPath, new Set(), 0);
+    }
+    try {
+      await IOUtils.makeDirectory(PathUtils.parent(contentOutPath), {
+        createAncestors: true,
+        ignoreExisting: true,
+      });
+      await IOUtils.writeUTF8(contentOutPath, combined);
+    } catch (e) {
+      console.warn("[UserChrome Hot-Reload] Failed to write combined content CSS:", e);
+    }
+  }
+
+  async function refreshContentSheets() {
+    await buildContentCss();
+    try {
+      Services.ppmm.broadcastAsyncMessage(REBUILD_MESSAGE, {});
+    } catch (e) {
+      console.warn("[UserChrome Hot-Reload] Failed to broadcast content refresh:", e);
+    }
     for (const win of chromeWindows()) {
       if (!win.gBrowser) {
         continue;
       }
       for (const tab of win.gBrowser.tabs) {
-        const uri = tab.linkedBrowser?.currentURI;
-        if (!uri || uri.scheme !== "about") {
+        const windowGlobal = tab.linkedBrowser?.browsingContext?.currentWindowGlobal;
+        if (!windowGlobal) {
           continue;
         }
         try {
-          tab.linkedBrowser.reload();
-          reloaded++;
-        } catch (e) {
-          console.warn("[UserChrome Hot-Reload] Failed to reload content page:", e);
-        }
+          windowGlobal.getActor(ACTOR_NAME)?.sendAsyncMessage(REBUILD_MESSAGE, {});
+        } catch (e) {}
       }
-    }
-    if (reloaded === 0) {
-      console.log("[UserChrome Hot-Reload] No open in-content pages to refresh.");
     }
   }
 
@@ -209,9 +289,29 @@
   function reloadNow() {
     console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
     reloadChromeSheets();
-    reloadContentPages();
+    refreshContentSheets();
     reloadSineMods();
     showToast("UserChrome & Content reloaded");
+  }
+
+  function registerContentActor() {
+    try {
+      ChromeUtils.unregisterWindowActor(ACTOR_NAME);
+    } catch (e) {}
+    try {
+      ChromeUtils.registerWindowActor(ACTOR_NAME, {
+        child: {
+          esModuleURI: ACTOR_MODULE,
+          events: {
+            DOMWindowCreated: {},
+          },
+        },
+        matchesTarget: "content",
+        allFrames: false,
+      });
+    } catch (e) {
+      console.error("[UserChrome Hot-Reload] Failed to register content actor:", e);
+    }
   }
 
   function setupHotkey() {
@@ -256,9 +356,11 @@
   }
 
   function init() {
+    registerContentActor();
     setupHotkey();
     setInterval(tick, getPollInterval());
     tick();
+    refreshContentSheets();
     window.addEventListener("beforeunload", () => {
       window.__userChromeHotReloadInitialized = false;
     });
