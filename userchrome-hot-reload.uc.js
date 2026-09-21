@@ -16,22 +16,13 @@
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
 
-  const profileChromeDir = PathUtils.join(PathUtils.profileDir, "chrome");
-  const chromeEntryPath = PathUtils.join(profileChromeDir, "userChrome.css");
-  const contentEntryPath = PathUtils.join(profileChromeDir, "userContent.css");
-  const contentOutPath = PathUtils.join(
-    profileChromeDir,
-    "sine-mods",
-    "zen-userchrome-hot-reload",
-    "generated",
-    "content.css"
-  );
-
   const ACTOR_NAME = "UserChromeHotReload";
   const ACTOR_MODULE =
     "chrome://sine/content/zen-userchrome-hot-reload/hot-reload-content.sys.mjs";
-  const REBUILD_MESSAGE = "UserChromeHotReload:RebuildUserStyles";
-  const MAX_IMPORT_DEPTH = 8;
+
+  const profileChromeDir = PathUtils.join(PathUtils.profileDir, "chrome");
+  const chromeEntryPath = PathUtils.join(profileChromeDir, "userChrome.css");
+  const contentEntryPath = PathUtils.join(profileChromeDir, "userContent.css");
 
   let lastModifiedTimes = new Map();
   let pendingReload = null;
@@ -171,94 +162,47 @@
     Services.obs.notifyObservers(null, "chrome-flush-caches", null);
   }
 
-  function stripImports(css) {
-    return css.replace(
-      /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?\s*[^;]*;/gi,
-      (match, ref) => `\n/* inlined: ${ref} */\n`
-    );
+  function collectBrowsingContexts(context, out = []) {
+    out.push(context);
+    for (const child of context.children) {
+      collectBrowsingContexts(child, out);
+    }
+    return out;
   }
 
-  function importRefs(css) {
-    const refs = [];
-    const re =
-      /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?\s*[^;]*;/gi;
-    let match;
-    while ((match = re.exec(css))) {
-      refs.push(match[1]);
-    }
-    return refs;
-  }
-
-  function resolveRef(ref, fromFile) {
-    if (/^[a-z]+:\/\//i.test(ref) || ref.startsWith("data:")) {
-      return null;
-    }
-    if (ref.startsWith("/")) {
-      return ref;
-    }
-    return PathUtils.join(PathUtils.parent(fromFile), ref);
-  }
-
-  async function inlineImports(filePath, seen, depth) {
-    if (depth > MAX_IMPORT_DEPTH || seen.has(filePath)) {
-      return "";
-    }
-    seen.add(filePath);
-    let css;
+  function reloadContentSheets() {
+    let uri;
     try {
-      css = await IOUtils.readUTF8(filePath);
+      uri = Services.io.newURI(PathUtils.toFileURI(contentEntryPath)).spec;
     } catch (e) {
-      return "";
+      return;
     }
-    const refs = importRefs(css);
-    const body = stripImports(css);
-    let inlined = "";
-    for (const ref of refs) {
-      const resolved = resolveRef(ref, filePath);
-      if (!resolved) {
-        continue;
-      }
-      inlined += await inlineImports(resolved, seen, depth + 1);
-    }
-    return `${body}\n${inlined}`;
-  }
 
-  async function buildContentCss() {
-    let combined = "";
-    if (await IOUtils.exists(contentEntryPath)) {
-      combined = await inlineImports(contentEntryPath, new Set(), 0);
-    }
-    try {
-      await IOUtils.makeDirectory(PathUtils.parent(contentOutPath), {
-        createAncestors: true,
-        ignoreExisting: true,
-      });
-      await IOUtils.writeUTF8(contentOutPath, combined);
-    } catch (e) {
-      console.warn("[UserChrome Hot-Reload] Failed to write combined content CSS:", e);
-    }
-  }
-
-  async function refreshContentSheets() {
-    await buildContentCss();
-    try {
-      Services.ppmm.broadcastAsyncMessage(REBUILD_MESSAGE, {});
-    } catch (e) {
-      console.warn("[UserChrome Hot-Reload] Failed to broadcast content refresh:", e);
-    }
+    let sent = 0;
     for (const win of chromeWindows()) {
       if (!win.gBrowser) {
         continue;
       }
       for (const tab of win.gBrowser.tabs) {
-        const windowGlobal = tab.linkedBrowser?.browsingContext?.currentWindowGlobal;
-        if (!windowGlobal) {
+        const browsingContext = tab.linkedBrowser?.browsingContext;
+        if (!browsingContext) {
           continue;
         }
-        try {
-          windowGlobal.getActor(ACTOR_NAME)?.sendAsyncMessage(REBUILD_MESSAGE, {});
-        } catch (e) {}
+        for (const context of collectBrowsingContexts(browsingContext)) {
+          const windowGlobal = context.currentWindowGlobal;
+          if (!windowGlobal) {
+            continue;
+          }
+          try {
+            const actor = windowGlobal.getActor(ACTOR_NAME);
+            actor?.sendAsyncMessage("update-sheets", { uri });
+            sent++;
+          } catch (e) {}
+        }
       }
+    }
+    if (sent === 0) {
+      console.warn("[UserChrome Hot-Reload] No content processes available to refresh.");
     }
   }
 
@@ -289,7 +233,7 @@
   function reloadNow() {
     console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
     reloadChromeSheets();
-    refreshContentSheets();
+    reloadContentSheets();
     reloadSineMods();
     showToast("UserChrome & Content reloaded");
   }
@@ -302,12 +246,12 @@
       ChromeUtils.registerWindowActor(ACTOR_NAME, {
         child: {
           esModuleURI: ACTOR_MODULE,
-          events: {
-            DOMWindowCreated: {},
-          },
+          events: {},
         },
-        matchesTarget: "content",
         allFrames: false,
+        matchesTarget: ["content"],
+        includeChrome: false,
+        messageManagerGroups: ["browsers"],
       });
     } catch (e) {
       console.error("[UserChrome Hot-Reload] Failed to register content actor:", e);
@@ -360,7 +304,6 @@
     setupHotkey();
     setInterval(tick, getPollInterval());
     tick();
-    refreshContentSheets();
     window.addEventListener("beforeunload", () => {
       window.__userChromeHotReloadInitialized = false;
     });

@@ -21,13 +21,9 @@ but for the browser UI. Its primary use case is live theming:
    then `loadSheet(uri, USER_SHEET)` on the profile `userChrome.css`, followed by
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
    re-resolves its `@import`s, so freshly generated colors apply immediately.
-3. **Content reload** — the parent inlines the `userContent.css` `@import` chain into a single
-   combined sheet at `<mod>/generated/content.css`, then a `UserChromeHotReload` JSWindowActor
-   injects it as a `USER_SHEET` into every content window (`DOMWindowCreated` for new documents,
-   a `Services.ppmm` broadcast + direct actor messages for open ones). This deliberately bypasses
-   Firefox's engine path, because `GlobalStyleSheetCache` parses the profile `userContent.css`
-   **once per process** and never re-reads it — so reloading pages or flushing caches cannot
-   update it.
+3. **Content reload** — a `JSWindowActor` (`UserChromeHotReload`) refreshes the profile
+   `userContent.css` in every open content document across all processes (Fission-safe),
+   same pattern Sine uses for its own content injection.
 4. **Sine engine (optional, default on)** — also calls `window.manager.rebuildMods(true, true)`
    so Sine-managed themes refresh in sync.
 
@@ -79,32 +75,14 @@ The profile `chrome/userChrome.css` must `@import` the generated file(s):
 
 With this mod running, the next `matugen` run re-tints Zen and all open pages live.
 
-## Scope — what content hot-reload actually touches
-
-`userContent.css` (and the generated `zen-userContent.css` it imports) is **in-content** CSS:
-it only styles Firefox's built-in pages (`about:newtab`, `about:settings`, `about:library`,
-the download/extension pages, …). It never applies to regular websites, so a wallpaper change
-will only visibly re-tint those pages — that is expected.
-
-Rules that target ordinary sites (e.g. via `@-moz-document`) work in legacy
-`userContent.css` but are outside this mod's reload path; for per-website theming use
-[Zen boosts](https://github.com/zen-browser/zen-boosts) instead.
-
 ## Notes / limitations
 
 - Reloads are triggered by mtime polling, matching how `zen-boost-hot-reload` behaves.
-- Content is injected as a **user sheet** into every content document (including websites), so
-  it can override page styles. In practice `userContent.css` only defines `--in-content-*`
-  design tokens, which regular sites ignore — but if you add broad rules there, they will apply
-  everywhere.
-- The injected sheet is re-added on every change; it does not remove the engine's own cached
-  `userContent.css` (which keeps its startup colors). Because both are user sheets, the
-  freshly injected one wins on equal specificity.
-- Pages opened **before** the mod loaded are refreshed on the next change (the actor is
-  instantiated and messaged directly); already-open documents are also refreshed.
-- The generated combined sheet lives at
-  `chrome/sine-mods/zen-userchrome-hot-reload/generated/content.css` and is safe to delete —
-  it is rebuilt automatically.
+- `userContent.css` is refreshed in already-open documents; documents opened **after** a
+  change already pick up fresh content from the engine.
+- CSS cached inside `@import` chains is re-read when the entrypoint is re-registered +
+  `chrome-flush-caches` runs; if you hit a stale-import case, regenerate the entrypoint too.
+- Edit `theme.json` to point `homepage`/`readme` at your real repo before publishing.
 
 ## License
 

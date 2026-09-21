@@ -1,50 +1,22 @@
-const REBUILD_MESSAGE = "UserChromeHotReload:RebuildUserStyles";
-const CONTENT_URI =
-  "chrome://sine/content/zen-userchrome-hot-reload/generated/content.css";
-
 export class UserChromeHotReloadChild extends JSWindowActorChild {
-  constructor() {
-    super();
-    Services.cpmm.addMessageListener(REBUILD_MESSAGE, this);
-  }
-
-  didDestroy() {
-    Services.cpmm.removeMessageListener(REBUILD_MESSAGE, this);
-  }
-
-  handleEvent(event) {
-    if (event.type === "DOMWindowCreated") {
-      this.injectUserStyle();
-    }
-  }
-
   receiveMessage(message) {
-    if (message.name === REBUILD_MESSAGE) {
-      this.removeUserStyle();
-      this.injectUserStyle();
+    if (message.name !== "update-sheets") {
+      return;
     }
-  }
-
-  injectUserStyle() {
-    const utils = this.contentWindow?.windowUtils;
-    if (!utils) {
+    const { uri } = message.data || {};
+    if (!uri) {
       return;
     }
     try {
-      utils.loadSheet(Services.io.newURI(CONTENT_URI), utils.USER_SHEET);
+      const utils = this.contentWindow.windowUtils;
+      const sheetURI = Services.io.newURI(uri);
+      try {
+        utils.removeSheet(sheetURI, utils.USER_SHEET);
+      } catch (e) {}
+      utils.loadSheet(sheetURI, utils.USER_SHEET);
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Failed to inject content style:", e);
+      console.error("[UserChrome Hot-Reload] Failed to reload content sheet:", e);
     }
-  }
-
-  removeUserStyle() {
-    const utils = this.contentWindow?.windowUtils;
-    if (!utils) {
-      return;
-    }
-    try {
-      utils.removeSheet(Services.io.newURI(CONTENT_URI), utils.USER_SHEET);
-    } catch (e) {}
   }
 }
 
