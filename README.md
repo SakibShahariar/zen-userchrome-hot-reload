@@ -21,9 +21,10 @@ but for the browser UI. Its primary use case is live theming:
    then `loadSheet(uri, USER_SHEET)` on the profile `userChrome.css`, followed by
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
    re-resolves its `@import`s, so freshly generated colors apply immediately.
-3. **Content reload** — a `JSWindowActor` (`UserChromeHotReload`) refreshes the profile
-   `userContent.css` in every open content document across all processes (Fission-safe),
-   same pattern Sine uses for its own content injection.
+3. **Content reload** — reloads every open **in-content page** (`about:` tabs: newtab,
+   settings, library, …) after a `chrome-flush-caches`. `userContent.css` only affects
+   Firefox's in-content pages, and those re-read it on document load — so reloading them is
+   exactly what the engine guarantees. Regular websites are intentionally left untouched.
 4. **Sine engine (optional, default on)** — also calls `window.manager.rebuildMods(true, true)`
    so Sine-managed themes refresh in sync.
 
@@ -75,14 +76,27 @@ The profile `chrome/userChrome.css` must `@import` the generated file(s):
 
 With this mod running, the next `matugen` run re-tints Zen and all open pages live.
 
+## Scope — what content hot-reload actually touches
+
+`userContent.css` (and the generated `zen-userContent.css` it imports) is **in-content** CSS:
+it only styles Firefox's built-in pages (`about:newtab`, `about:settings`, `about:library`,
+the download/extension pages, …). It never applies to regular websites, so a wallpaper change
+will only visibly re-tint those pages — that is expected.
+
+Rules that target ordinary sites (e.g. via `@-moz-document`) work in legacy
+`userContent.css` but are outside this mod's reload path; for per-website theming use
+[Zen boosts](https://github.com/zen-browser/zen-boosts) instead.
+
 ## Notes / limitations
 
 - Reloads are triggered by mtime polling, matching how `zen-boost-hot-reload` behaves.
-- `userContent.css` is refreshed in already-open documents; documents opened **after** a
-  change already pick up fresh content from the engine.
-- CSS cached inside `@import` chains is re-read when the entrypoint is re-registered +
-  `chrome-flush-caches` runs; if you hit a stale-import case, regenerate the entrypoint too.
-- Edit `theme.json` to point `homepage`/`readme` at your real repo before publishing.
+- Content reload **reloads** open in-content tabs (`about:`) and leaves websites alone; it
+  does not inject stylesheet nodes into already-loaded remote documents (that would require a
+  content-process actor, which Sine/this profile does not support — `chrome://sine` is only
+  registered in the parent process).
+- If your matugen colors are not visible in a **freshly opened** `about:newtab` either, then
+  `userContent.css` is not being applied by your Zen build at all (a Zen ≥ 1.20 legacy-CSS
+  quirk) — that is outside this mod's control; the chrome side still works.
 
 ## License
 
