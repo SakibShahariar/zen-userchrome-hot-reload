@@ -12,6 +12,10 @@ but for the browser UI. Its primary use case is live theming:
 - This mod detects the change and reapplies the whole `userChrome.css` / `userContent.css`
   chain in every open window and tab in milliseconds.
 
+## Contents
+
+[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Notes / limitations](#notes--limitations) · [License](#license)
+
 ## How it works
 
 1. **Watcher** — polls the profile `chrome/` directory (top-level `*.css` +
@@ -35,7 +39,7 @@ a userChrome script).
 Options:
 
 - **From a GitHub repo**: paste your repo URL in Sine settings → Sine Mods → add custom mod.
-- **Local dev**: copy the whole `sine-userchrome-hot-reload` folder into
+- **Local dev**: copy the contents of this repository into
   `~/.zen/<profile>/chrome/sine-mods/zen-userchrome-hot-reload/` and add a `zen-userchrome-hot-reload`
   entry to `chrome/sine-mods/mods.json` (see the `zen-boost-hot-reload` entry as a template).
 
@@ -82,7 +86,6 @@ With this mod running, the next `matugen` run re-tints Zen and all open pages li
   change already pick up fresh content from the engine.
 - CSS cached inside `@import` chains is re-read when the entrypoint is re-registered +
   `chrome-flush-caches` runs; if you hit a stale-import case, regenerate the entrypoint too.
-- Edit `theme.json` to point `homepage`/`readme` at your real repo before publishing.
 
 ## License
 
