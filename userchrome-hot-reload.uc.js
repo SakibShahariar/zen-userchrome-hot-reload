@@ -157,13 +157,21 @@
       try {
         const info = await IOUtils.stat(path);
         const previous = lastModifiedTimes.get(path);
+        const current = {
+          lastModified: info.lastModified,
+          size: info.size,
+        };
         if (previous === undefined) {
-          lastModifiedTimes.set(path, info.lastModified);
+          lastModifiedTimes.set(path, current);
           if (initialScanComplete) {
             changed = true;
           }
-        } else if (info.lastModified > previous) {
-          lastModifiedTimes.set(path, info.lastModified);
+        } else if (
+          typeof previous !== "object" ||
+          previous.lastModified !== current.lastModified ||
+          previous.size !== current.size
+        ) {
+          lastModifiedTimes.set(path, current);
           changed = true;
         }
       } catch (e) {}
