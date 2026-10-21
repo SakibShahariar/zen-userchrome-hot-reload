@@ -366,6 +366,25 @@
     console.log("[UserChrome Hot-Reload] Watcher initialized. Watching:", getWatchRoot());
   }
 
+  function yieldWatcher() {
+    const wasWatcher = watcherActive || pollTimer !== null;
+    const forceReloadOnHandoff = pendingReload !== null;
+
+    watcherActive = false;
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (pendingReload !== null) {
+      clearTimeout(pendingReload);
+      pendingReload = null;
+    }
+
+    return wasWatcher
+      ? { lastModifiedTimes, initialScanComplete, forceReloadOnHandoff }
+      : null;
+  }
+
   function cleanupWindow() {
     const wasWatcher = watcherActive;
     const forceReloadOnHandoff = pendingReload !== null;
@@ -404,12 +423,36 @@
   function init() {
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
+    window.__userChromeHotReloadYieldWatcher = yieldWatcher;
     window.addEventListener("beforeunload", cleanupWindow, { once: true });
 
-    // Only one window polls at a time. Other windows keep a handoff callback
-    // ready so closing the owner does not silently stop hot reload.
+    // If a newly opened window becomes most recent, transfer watcher state
+    // from any existing owner before starting its own poller.
     if (window === mostRecentWindow) {
-      startWatcher();
+      let inheritedState = null;
+      for (const otherWindow of chromeWindows()) {
+        if (
+          otherWindow === window ||
+          otherWindow.closed ||
+          typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function"
+        ) {
+          continue;
+        }
+        const state = otherWindow.__userChromeHotReloadYieldWatcher();
+        if (!inheritedState && state) {
+          inheritedState = state;
+        }
+      }
+
+      if (inheritedState) {
+        startWatcher(
+          inheritedState.lastModifiedTimes,
+          inheritedState.initialScanComplete,
+          inheritedState.forceReloadOnHandoff
+        );
+      } else {
+        startWatcher();
+      }
     }
   }
 
