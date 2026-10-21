@@ -269,10 +269,31 @@
     }
     try {
       const win = Services.wm.getMostRecentWindow("navigator:browser");
-      if (win?.gZenUIManager?.showToast) {
-        win.gZenUIManager.showToast("zen-panel-ui-boosts-exported-message");
+      const manager = win?.gZenUIManager;
+      if (!manager?.showToast) {
+        return;
       }
-    } catch (e) {}
+
+      // Zen's toast API accepts Fluent IDs, not literal strings. Reuse its
+      // styled toast element, then replace the label with this mod's message.
+      const messageId = "zen-panel-ui-boosts-exported-message";
+      const toastPromise = manager.showToast(messageId);
+      const container = win.document.getElementById("zen-toast-container");
+      const toast = Array.from(container?.children ?? []).find(
+        (child) => child._messageId === messageId
+      );
+      const label = toast?.querySelector("label");
+      if (label) {
+        label.removeAttribute("data-l10n-id");
+        label.removeAttribute("data-l10n-args");
+        label.setAttribute("value", message);
+      }
+      toastPromise?.catch((e) => {
+        console.warn("[UserChrome Hot-Reload] Failed to show toast:", e);
+      });
+    } catch (e) {
+      console.warn("[UserChrome Hot-Reload] Failed to show toast:", e);
+    }
   }
 
   function reloadNow() {
