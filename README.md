@@ -70,12 +70,14 @@ input_path = './templates/zen-usercontent.css'
 output_path = '~/.zen/<profile>/chrome/zen-userContent.css'
 ```
 
-The profile `chrome/userChrome.css` must `@import` the generated file(s):
+The profile `chrome/userChrome.css` must `@import` the generated file(s). If the generated CSS is in the same directory, prefer relative imports so the setup works across profiles and machines:
 
 ```css
-@import url("/home/<user>/.zen/<profile>/chrome/zen-userChrome.css");
-@import url("/home/<user>/.zen/<profile>/chrome/mods/mods.css");
+@import url("zen-userChrome.css");
+@import url("mods/mods.css");
 ```
+
+Absolute paths also work when the files live elsewhere, but must be adjusted for your own profile and username.
 
 With this mod running, the next `matugen` run re-tints Zen and all open pages live.
 
