@@ -12,7 +12,7 @@
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.enabled",
     "label": "Enable hot reload in this profile",
-    "description": "Controls automatic watching and the manual reload hotkey for this Zen profile. Toggle the mod or restart the browser after changing this setting.",
+    "description": "Controls automatic watching and the manual reload hotkey for this Zen profile. Changes apply immediately.",
     "defaultValue": true
   },
   {
