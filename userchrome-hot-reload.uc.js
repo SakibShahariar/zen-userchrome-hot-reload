@@ -2,9 +2,6 @@
   "use strict";
 
   const mostRecentWindow = Services.wm.getMostRecentWindow("navigator:browser");
-  if (window !== mostRecentWindow) {
-    return;
-  }
   if (window.__userChromeHotReloadInitialized) {
     return;
   }
@@ -344,8 +341,15 @@
   }
 
   function init() {
-    registerContentActor();
+    // Register the manual reload shortcut in every browser window.
     setupHotkey();
+
+    // Keep a single polling watcher, owned by the most recent window.
+    if (window !== mostRecentWindow) {
+      return;
+    }
+
+    registerContentActor();
     pollTimer = setInterval(tick, getPollInterval());
     tick();
     window.addEventListener("beforeunload", () => {

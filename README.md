@@ -56,7 +56,7 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS; `sine-mods/`, `JS/`, and `utils/` remain excluded. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
 | `extensions.zen-userchrome-hot-reload.toast` | `true` | Show a Zen toast after each reload. |
-| `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload anytime. Empty disables. |
+| `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload from any browser window. Empty disables. |
 
 ## Matugen setup (reference)
 
