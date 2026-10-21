@@ -54,7 +54,9 @@
   }
 
   function getPollInterval() {
-    return Math.max(200, getPref("int", PREF_INTERVAL, 500));
+    const configured = getPref("string", PREF_INTERVAL, "500");
+    const interval = Number.parseInt(configured, 10);
+    return Number.isFinite(interval) && interval > 0 ? Math.max(200, interval) : 500;
   }
 
   function chromeWindows() {
