@@ -27,6 +27,7 @@
   let lastModifiedTimes = new Map();
   let pendingReload = null;
   let tickInProgress = false;
+  let initialScanComplete = false;
 
   function getPref(type, name, fallback) {
     try {
@@ -127,12 +128,17 @@
         const previous = lastModifiedTimes.get(path);
         if (previous === undefined) {
           lastModifiedTimes.set(path, info.lastModified);
+          if (initialScanComplete) {
+            changed = true;
+          }
         } else if (info.lastModified > previous) {
           lastModifiedTimes.set(path, info.lastModified);
           changed = true;
         }
       } catch (e) {}
     }
+
+    initialScanComplete = true;
 
     if (changed) {
       if (pendingReload) {
