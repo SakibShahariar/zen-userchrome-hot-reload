@@ -226,7 +226,7 @@
       return;
     }
     try {
-      const win = chromeWindows()[0];
+      const win = Services.wm.getMostRecentWindow("navigator:browser");
       win?.manager?.rebuildMods?.(true, true);
     } catch (e) {
       console.warn("[UserChrome Hot-Reload] Failed to rebuild Sine mods:", e);
@@ -238,7 +238,7 @@
       return;
     }
     try {
-      const win = chromeWindows()[0];
+      const win = Services.wm.getMostRecentWindow("navigator:browser");
       if (win?.gZenUIManager?.showToast) {
         win.gZenUIManager.showToast("zen-panel-ui-boosts-exported-message");
       }
