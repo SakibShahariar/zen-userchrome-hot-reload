@@ -29,6 +29,7 @@
   let initialScanComplete = false;
   let pollTimer = null;
   let watcherActive = false;
+  let hotkeyRegistered = false;
 
   function getPref(type, name, fallback) {
     try {
@@ -374,7 +375,7 @@
   }
 
   function setupHotkey() {
-    if (!getPref("bool", PREF_ENABLED, true)) {
+    if (hotkeyRegistered || !getPref("bool", PREF_ENABLED, true)) {
       return;
     }
     const combo = getPref("string", PREF_HOTKEY, "").toUpperCase();
@@ -394,6 +395,9 @@
     window.addEventListener(
       "keydown",
       (event) => {
+        if (!getPref("bool", PREF_ENABLED, true)) {
+          return;
+        }
         if (event.key.toUpperCase() !== key) {
           return;
         }
@@ -415,6 +419,7 @@
       },
       true
     );
+    hotkeyRegistered = true;
   }
 
   function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false) {
@@ -472,6 +477,7 @@
       pendingReload = null;
     }
     window.__userChromeHotReloadInitialized = false;
+    Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
 
     if (!wasWatcher) {
       return;
@@ -493,7 +499,47 @@
     }
   }
 
+  const enabledPrefObserver = {
+    observe() {
+      if (!getPref("bool", PREF_ENABLED, true)) {
+        yieldWatcher();
+        return;
+      }
+
+      setupHotkey();
+      if (Services.wm.getMostRecentWindow("navigator:browser") !== window) {
+        return;
+      }
+
+      let inheritedState = null;
+      for (const otherWindow of chromeWindows()) {
+        if (
+          otherWindow === window ||
+          otherWindow.closed ||
+          typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function"
+        ) {
+          continue;
+        }
+        const state = otherWindow.__userChromeHotReloadYieldWatcher();
+        if (!inheritedState && state) {
+          inheritedState = state;
+        }
+      }
+
+      if (inheritedState) {
+        startWatcher(
+          inheritedState.lastModifiedTimes,
+          inheritedState.initialScanComplete,
+          inheritedState.forceReloadOnHandoff
+        );
+      } else {
+        startWatcher();
+      }
+    },
+  };
+
   function init() {
+    Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
