@@ -26,6 +26,7 @@
 
   let lastModifiedTimes = new Map();
   let pendingReload = null;
+  let tickInProgress = false;
 
   function getPref(type, name, fallback) {
     try {
@@ -105,6 +106,11 @@
   }
 
   async function tick() {
+    if (tickInProgress) {
+      return;
+    }
+    tickInProgress = true;
+    try {
     const paths = await collectCssFiles(getWatchRoot());
     const pathSet = new Set(paths);
 
@@ -136,6 +142,9 @@
         pendingReload = null;
         reloadNow();
       }, 300);
+    }
+    } finally {
+      tickInProgress = false;
     }
   }
 
