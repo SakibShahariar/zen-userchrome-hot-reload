@@ -220,7 +220,7 @@
     return out;
   }
 
-  function reloadContentSheets() {
+  async function reloadContentSheets() {
     let uri;
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(contentEntryPath)).spec;
@@ -229,7 +229,7 @@
       return false;
     }
 
-    let sent = 0;
+    const requests = [];
     for (const win of chromeWindows()) {
       if (!win.gBrowser) {
         continue;
@@ -246,17 +246,35 @@
           }
           try {
             const actor = windowGlobal.getActor(ACTOR_NAME);
-            actor?.sendAsyncMessage("update-sheets", { uri });
-            sent++;
-          } catch (e) {}
+            if (actor) {
+              requests.push(actor.sendQuery("update-sheets", { uri }));
+            }
+          } catch (e) {
+            console.warn("[UserChrome Hot-Reload] Could not contact a content actor:", e);
+          }
         }
       }
     }
-    if (sent === 0) {
+
+    if (requests.length === 0) {
       console.warn("[UserChrome Hot-Reload] No content processes available to refresh.");
       return false;
     }
-    return true;
+
+    const results = await Promise.allSettled(requests);
+    const failed = results.filter(
+      (result) => result.status !== "fulfilled" || result.value?.ok !== true
+    );
+    if (failed.length) {
+      console.error(
+        "[UserChrome Hot-Reload] Failed to refresh content sheets in",
+        failed.length,
+        "of",
+        results.length,
+        "document(s)."
+      );
+    }
+    return failed.length === 0;
   }
 
   function reloadSineMods() {
@@ -304,14 +322,19 @@
     }
   }
 
-  function reloadNow() {
+  async function reloadNow() {
     if (!getPref("bool", PREF_ENABLED, true)) {
       return;
     }
 
     console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
     const chromeOk = reloadChromeSheets();
-    const contentOk = reloadContentSheets();
+    let contentOk = false;
+    try {
+      contentOk = await reloadContentSheets();
+    } catch (e) {
+      console.error("[UserChrome Hot-Reload] Content reload request failed:", e);
+    }
     reloadSineMods();
 
     if (chromeOk && contentOk) {

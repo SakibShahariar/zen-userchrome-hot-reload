@@ -5,7 +5,7 @@ export class UserChromeHotReloadChild extends JSWindowActorChild {
     }
     const { uri } = message.data || {};
     if (!uri) {
-      return;
+      return { ok: false, error: "Missing stylesheet URI" };
     }
     try {
       const utils = this.contentWindow.windowUtils;
@@ -14,8 +14,10 @@ export class UserChromeHotReloadChild extends JSWindowActorChild {
         utils.removeSheet(sheetURI, utils.USER_SHEET);
       } catch (e) {}
       utils.loadSheet(sheetURI, utils.USER_SHEET);
+      return { ok: true };
     } catch (e) {
       console.error("[UserChrome Hot-Reload] Failed to reload content sheet:", e);
+      return { ok: false, error: String(e) };
     }
   }
 }
