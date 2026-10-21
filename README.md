@@ -52,6 +52,7 @@ in Sine settings when you don't want it watching.
 
 | Preference | Default | Description |
 | --- | --- | --- |
+| `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile. Restart Zen or toggle the mod after changing it. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch instead of the profile chrome dir. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
 | `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS; `sine-mods/`, `JS/`, and `utils/` remain excluded. |

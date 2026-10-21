@@ -13,6 +13,7 @@
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
+  const PREF_ENABLED = "extensions.zen-userchrome-hot-reload.enabled";
 
   const ACTOR_NAME = "UserChromeHotReload";
   const ACTOR_MODULE =
@@ -189,9 +190,11 @@
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(chromeEntryPath));
     } catch (e) {
-      return;
+      console.error("[UserChrome Hot-Reload] Invalid userChrome.css URI:", e);
+      return false;
     }
 
+    let loaded = false;
     for (const win of chromeWindows()) {
       const utils = win.windowUtils;
       try {
@@ -199,12 +202,14 @@
       } catch (e) {}
       try {
         utils.loadSheet(uri, utils.USER_SHEET);
+        loaded = true;
       } catch (e) {
         console.warn("[UserChrome Hot-Reload] Failed to reload chrome sheet:", e);
       }
     }
 
     Services.obs.notifyObservers(null, "chrome-flush-caches", null);
+    return loaded;
   }
 
   function collectBrowsingContexts(context, out = []) {
@@ -220,7 +225,8 @@
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(contentEntryPath)).spec;
     } catch (e) {
-      return;
+      console.error("[UserChrome Hot-Reload] Invalid userContent.css URI:", e);
+      return false;
     }
 
     let sent = 0;
@@ -248,7 +254,9 @@
     }
     if (sent === 0) {
       console.warn("[UserChrome Hot-Reload] No content processes available to refresh.");
+      return false;
     }
+    return true;
   }
 
   function reloadSineMods() {
@@ -297,11 +305,21 @@
   }
 
   function reloadNow() {
+    if (!getPref("bool", PREF_ENABLED, true)) {
+      return;
+    }
+
     console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
-    reloadChromeSheets();
-    reloadContentSheets();
+    const chromeOk = reloadChromeSheets();
+    const contentOk = reloadContentSheets();
     reloadSineMods();
-    showToast("UserChrome & Content reloaded");
+
+    if (chromeOk && contentOk) {
+      showToast("UserChrome & Content reloaded");
+    } else {
+      console.error("[UserChrome Hot-Reload] Reload incomplete. Check the browser console for details.");
+      showToast("UserChrome reload failed. Check the browser console.");
+    }
   }
 
   function registerContentActor() {
@@ -325,6 +343,9 @@
   }
 
   function setupHotkey() {
+    if (!getPref("bool", PREF_ENABLED, true)) {
+      return;
+    }
     const combo = getPref("string", PREF_HOTKEY, "").toUpperCase();
     if (!combo) {
       return;
@@ -366,7 +387,7 @@
   }
 
   function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false) {
-    if (watcherActive || pollTimer !== null) {
+    if (!getPref("bool", PREF_ENABLED, true) || watcherActive || pollTimer !== null) {
       return;
     }
 
