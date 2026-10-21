@@ -27,6 +27,7 @@
   let tickInProgress = false;
   let initialScanComplete = false;
   let pollTimer = null;
+  let watcherActive = false;
 
   function getPref(type, name, fallback) {
     try {
@@ -133,12 +134,15 @@
   }
 
   async function tick() {
-    if (tickInProgress) {
+    if (!watcherActive || tickInProgress) {
       return;
     }
     tickInProgress = true;
     try {
     const paths = await collectCssFiles(getWatchRoot());
+    if (!watcherActive) {
+      return;
+    }
     const pathSet = new Set(paths);
 
     for (const cachedPath of lastModifiedTimes.keys()) {
@@ -340,30 +344,73 @@
     );
   }
 
-  function init() {
-    // Register the manual reload shortcut in every browser window.
-    setupHotkey();
-
-    // Keep a single polling watcher, owned by the most recent window.
-    if (window !== mostRecentWindow) {
+  function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false) {
+    if (watcherActive || pollTimer !== null) {
       return;
     }
+
+    if (previousTimes instanceof Map) {
+      lastModifiedTimes = previousTimes;
+    }
+    initialScanComplete = wasInitialized;
+    watcherActive = true;
 
     registerContentActor();
     pollTimer = setInterval(tick, getPollInterval());
     tick();
-    window.addEventListener("beforeunload", () => {
-      if (pollTimer !== null) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
-      if (pendingReload !== null) {
-        clearTimeout(pendingReload);
-        pendingReload = null;
-      }
-      window.__userChromeHotReloadInitialized = false;
-    }, { once: true });
+
+    if (forceReload) {
+      reloadNow();
+    }
+
     console.log("[UserChrome Hot-Reload] Watcher initialized. Watching:", getWatchRoot());
+  }
+
+  function cleanupWindow() {
+    const wasWatcher = watcherActive;
+    const forceReloadOnHandoff = pendingReload !== null;
+
+    watcherActive = false;
+    if (pollTimer !== null) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (pendingReload !== null) {
+      clearTimeout(pendingReload);
+      pendingReload = null;
+    }
+    window.__userChromeHotReloadInitialized = false;
+
+    if (!wasWatcher) {
+      return;
+    }
+
+    // Transfer watcher ownership before this window disappears.
+    const nextWindow = chromeWindows().find(
+      (win) =>
+        win !== window &&
+        !win.closed &&
+        typeof win.__userChromeHotReloadStartWatcher === "function"
+    );
+    if (nextWindow) {
+      nextWindow.__userChromeHotReloadStartWatcher(
+        lastModifiedTimes,
+        initialScanComplete,
+        forceReloadOnHandoff
+      );
+    }
+  }
+
+  function init() {
+    setupHotkey();
+    window.__userChromeHotReloadStartWatcher = startWatcher;
+    window.addEventListener("beforeunload", cleanupWindow, { once: true });
+
+    // Only one window polls at a time. Other windows keep a handoff callback
+    // ready so closing the owner does not silently stop hot reload.
+    if (window === mostRecentWindow) {
+      startWatcher();
+    }
   }
 
   init();

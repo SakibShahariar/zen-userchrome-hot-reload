@@ -18,10 +18,11 @@ but for the browser UI. Its primary use case is live theming:
 
 ## How it works
 
-1. **Watcher** — polls the profile `chrome/` directory (top-level `*.css` +
+1. **Watcher** — a single polling watcher monitors the profile `chrome/` directory (top-level `*.css` +
    `mods/*.css` by default; optional recursive scanning can include deeper CSS directories).
    `sine-mods/`, `JS/`, and `utils/` are always excluded to avoid self-triggering loops.
-   Tracks mtimes via `IOUtils.stat`, default 500ms, debounced 300ms.
+   Ownership transfers to another open browser window if the watcher owner closes. Tracks mtimes
+   via `IOUtils.stat`, default 500ms, debounced 300ms.
 2. **Chrome reload** — for every browser window: `windowUtils.removeSheet(uri, USER_SHEET)`
    then `loadSheet(uri, USER_SHEET)` on the profile `userChrome.css`, followed by
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
