@@ -28,6 +28,7 @@
   let pendingReload = null;
   let tickInProgress = false;
   let initialScanComplete = false;
+  let pollTimer = null;
 
   function getPref(type, name, fallback) {
     try {
@@ -317,11 +318,19 @@
   function init() {
     registerContentActor();
     setupHotkey();
-    setInterval(tick, getPollInterval());
+    pollTimer = setInterval(tick, getPollInterval());
     tick();
     window.addEventListener("beforeunload", () => {
+      if (pollTimer !== null) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+      if (pendingReload !== null) {
+        clearTimeout(pendingReload);
+        pendingReload = null;
+      }
       window.__userChromeHotReloadInitialized = false;
-    });
+    }, { once: true });
     console.log("[UserChrome Hot-Reload] Watcher initialized. Watching:", getWatchRoot());
   }
 
