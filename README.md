@@ -19,8 +19,9 @@ but for the browser UI. Its primary use case is live theming:
 ## How it works
 
 1. **Watcher** — polls the profile `chrome/` directory (top-level `*.css` +
-   `mods/*.css` only; `sine-mods/`, `JS/`, `utils/` are deliberately ignored to avoid
-   self-triggering loops). Tracks mtimes via `IOUtils.stat`, default 500ms, debounced 300ms.
+   `mods/*.css` by default; optional recursive scanning can include deeper CSS directories).
+   `sine-mods/`, `JS/`, and `utils/` are always excluded to avoid self-triggering loops.
+   Tracks mtimes via `IOUtils.stat`, default 500ms, debounced 300ms.
 2. **Chrome reload** — for every browser window: `windowUtils.removeSheet(uri, USER_SHEET)`
    then `loadSheet(uri, USER_SHEET)` on the profile `userChrome.css`, followed by
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
@@ -52,6 +53,7 @@ in Sine settings when you don't want it watching.
 | --- | --- | --- |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch instead of the profile chrome dir. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
+| `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS; `sine-mods/`, `JS/`, and `utils/` remain excluded. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
 | `extensions.zen-userchrome-hot-reload.toast` | `true` | Show a Zen toast after each reload. |
 | `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload anytime. Empty disables. |

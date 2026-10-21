@@ -24,6 +24,13 @@
   },
   {
     "type": "checkbox",
+    "property": "extensions.zen-userchrome-hot-reload.watch-nested-directories",
+    "label": "Watch nested directories",
+    "description": "Also scan nested CSS directories. The sine-mods, JS, and utils directories are always excluded. Disabled by default.",
+    "defaultValue": false
+  },
+  {
+    "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.reload-sine-mods",
     "label": "Rebuild Sine mods too",
     "description": "Also calls Sine's manager.rebuildMods() so Sine-managed themes refresh in sync.",

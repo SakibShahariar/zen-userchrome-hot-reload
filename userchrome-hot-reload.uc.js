@@ -15,6 +15,7 @@
   const PREF_SINE = "extensions.zen-userchrome-hot-reload.reload-sine-mods";
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
+  const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
 
   const ACTOR_NAME = "UserChromeHotReload";
   const ACTOR_MODULE =
@@ -70,10 +71,53 @@
 
   async function collectCssFiles(root) {
     const paths = [];
+    const watchNested = getPref("bool", PREF_NESTED, false);
+    const excludedDirectories = new Set(["sine-mods", "JS", "utils"]);
+
+    async function scanDirectory(directory, recursive) {
+      let children;
+      try {
+        children = await IOUtils.getChildren(directory);
+      } catch (e) {
+        console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
+        return;
+      }
+
+      for (const child of children) {
+        try {
+          const childStat = await IOUtils.stat(child);
+          const baseName = PathUtils.filename(child);
+
+          if (childStat.type === "regular" && baseName.endsWith(".css")) {
+            paths.push(child);
+            continue;
+          }
+
+          if (childStat.type !== "directory" || excludedDirectories.has(baseName)) {
+            continue;
+          }
+
+          // Preserve the existing default: root CSS files and one level inside mods/.
+          if (!recursive) {
+            if (baseName === "mods") {
+              await scanDirectory(child, false);
+            } else if (watchNested) {
+              await scanDirectory(child, true);
+            }
+          } else {
+            await scanDirectory(child, true);
+          }
+        } catch (e) {
+          // A file can disappear while a scan is in progress; ignore that entry.
+        }
+      }
+    }
+
     try {
       if (!(await IOUtils.exists(root))) {
         return paths;
       }
+
       const stat = await IOUtils.stat(root);
       if (stat.type === "regular") {
         paths.push(root);
@@ -83,29 +127,11 @@
         return paths;
       }
 
-      const children = await IOUtils.getChildren(root);
-      for (const child of children) {
-        try {
-          const childStat = await IOUtils.stat(child);
-          const baseName = PathUtils.filename(child);
-          if (childStat.type === "regular" && baseName.endsWith(".css")) {
-            paths.push(child);
-          } else if (childStat.type === "directory" && baseName === "mods") {
-            const modChildren = await IOUtils.getChildren(child);
-            for (const modChild of modChildren) {
-              try {
-                const modStat = await IOUtils.stat(modChild);
-                if (modStat.type === "regular" && modChild.endsWith(".css")) {
-                  paths.push(modChild);
-                }
-              } catch (e) {}
-            }
-          }
-        } catch (e) {}
-      }
+      await scanDirectory(root, false);
     } catch (e) {
       console.error("[UserChrome Hot-Reload] Failed to scan watch path:", e);
     }
+
     return paths;
   }
 
