@@ -478,6 +478,7 @@
     }
     window.__userChromeHotReloadInitialized = false;
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
+    Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
 
     if (!wasWatcher) {
       return;
@@ -498,6 +499,17 @@
       );
     }
   }
+
+  const pollIntervalPrefObserver = {
+    observe() {
+      // Apply interval changes immediately without creating a second poller.
+      if (!watcherActive || pollTimer === null) {
+        return;
+      }
+      clearInterval(pollTimer);
+      pollTimer = setInterval(tick, getPollInterval());
+    },
+  };
 
   const enabledPrefObserver = {
     observe() {
@@ -540,6 +552,7 @@
 
   function init() {
     Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
+    Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
