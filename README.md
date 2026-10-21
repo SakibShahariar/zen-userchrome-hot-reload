@@ -28,8 +28,8 @@ but for the browser UI. Its primary use case is live theming:
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
    re-resolves its `@import`s, so freshly generated colors apply immediately.
 3. **Content reload** — a `JSWindowActor` (`UserChromeHotReload`) refreshes the profile
-   `userContent.css` in every open content document across all processes (Fission-safe),
-   same pattern Sine uses for its own content injection.
+   `userContent.css` in every open content document and iframe across all processes
+   (Fission-safe), same pattern Sine uses for its own content injection.
 4. **Sine engine (optional, default on)** — also calls `window.manager.rebuildMods(true, true)`
    so Sine-managed themes refresh in sync.
 

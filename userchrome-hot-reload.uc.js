@@ -293,7 +293,7 @@
           esModuleURI: ACTOR_MODULE,
           events: {},
         },
-        allFrames: false,
+        allFrames: true,
         matchesTarget: ["content"],
         includeChrome: false,
         messageManagerGroups: ["browsers"],
