@@ -100,7 +100,7 @@
           // Preserve the existing default: root CSS files and one level inside mods/.
           if (!recursive) {
             if (baseName === "mods") {
-              await scanDirectory(child, false);
+              await scanDirectory(child, watchNested);
             } else if (watchNested) {
               await scanDirectory(child, true);
             }
