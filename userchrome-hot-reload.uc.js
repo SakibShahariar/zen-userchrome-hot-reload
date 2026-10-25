@@ -13,6 +13,7 @@
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
+  const PREF_EXCLUDED_DIRS = "extensions.zen-userchrome-hot-reload.excluded-dirs";
   const PREF_ENABLED = "extensions.zen-userchrome-hot-reload.enabled";
 
   const ACTOR_NAME = "UserChromeHotReload";
@@ -38,8 +39,7 @@
         return fallback;
       }
       if (type === "string") {
-        const value = Services.prefs.getStringPref(name).trim();
-        return value || fallback;
+        return Services.prefs.getStringPref(name).trim();
       }
       if (type === "bool") {
         return Services.prefs.getBoolPref(name);
@@ -73,7 +73,12 @@
   async function collectCssFiles(root) {
     const paths = [];
     const watchNested = getPref("bool", PREF_NESTED, false);
-    const excludedDirectories = new Set(["sine-mods", "JS", "utils"]);
+    const excludedDirectories = new Set(
+      getPref("string", PREF_EXCLUDED_DIRS, "sine-mods,JS,utils")
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+    );
 
     async function scanDirectory(directory, recursive) {
       let children;

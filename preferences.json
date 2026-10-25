@@ -33,8 +33,15 @@
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.watch-nested-directories",
     "label": "Watch nested directories",
-    "description": "Also scan nested CSS directories. The sine-mods, JS, and utils directories are always excluded. Disabled by default.",
+    "description": "Also scan nested CSS directories. Directories listed in Excluded Directories are skipped. Disabled by default.",
     "defaultValue": false
+  },
+  {
+    "type": "string",
+    "property": "extensions.zen-userchrome-hot-reload.excluded-dirs",
+    "label": "Excluded Directories",
+    "description": "Comma-separated directory names to skip while scanning CSS. Defaults to sine-mods,JS,utils. Leave empty to exclude none.",
+    "defaultValue": "sine-mods,JS,utils"
   },
   {
     "type": "checkbox",
