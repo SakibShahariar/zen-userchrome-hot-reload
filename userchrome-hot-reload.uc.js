@@ -371,9 +371,6 @@
 
   function registerContentActor() {
     try {
-      ChromeUtils.unregisterWindowActor(ACTOR_NAME);
-    } catch (e) {}
-    try {
       ChromeUtils.registerWindowActor(ACTOR_NAME, {
         child: {
           esModuleURI: ACTOR_MODULE,
@@ -385,7 +382,10 @@
         messageManagerGroups: ["browsers"],
       });
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Failed to register content actor:", e);
+      const message = String(e);
+      if (!/already registered|already exists|duplicate/i.test(message)) {
+        console.error("[UserChrome Hot-Reload] Failed to register content actor:", e);
+      }
     }
   }
 
