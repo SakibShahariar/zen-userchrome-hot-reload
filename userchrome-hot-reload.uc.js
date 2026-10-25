@@ -628,6 +628,8 @@
   const enabledPrefObserver = {
     observe() {
       if (!getPref("bool", PREF_ENABLED, true)) {
+        // Remove the now-inert key listener immediately while disabled.
+        setupHotkey();
         yieldWatcher();
         return;
       }
