@@ -81,7 +81,10 @@
         .filter(Boolean)
     );
 
+    const visitedDirectories = new Set();
+
     async function scanDirectory(directory, recursive) {
+      visitedDirectories.add(directory);
       let directoryStat;
       try {
         directoryStat = await IOUtils.stat(directory);
@@ -179,6 +182,13 @@
       }
 
       await scanDirectory(root, false);
+
+      // Drop cache entries for directories removed or excluded since the last poll.
+      for (const cachedDirectory of directoryCache.keys()) {
+        if (!visitedDirectories.has(cachedDirectory)) {
+          directoryCache.delete(cachedDirectory);
+        }
+      }
     } catch (e) {
       console.error("[UserChrome Hot-Reload] Failed to scan watch path:", e);
     }
