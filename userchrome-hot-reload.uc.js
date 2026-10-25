@@ -45,7 +45,7 @@
         return Services.prefs.getBoolPref(name);
       }
       if (type === "int") {
-        return Services.prefs.getIntPref(name) || fallback;
+        return Services.prefs.getIntPref(name);
       }
     } catch (e) {}
     return fallback;
