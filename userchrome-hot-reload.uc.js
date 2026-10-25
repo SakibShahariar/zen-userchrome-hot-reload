@@ -65,9 +65,19 @@
 
   function chromeWindows() {
     const windows = [];
-    const enumerator = Services.wm.getEnumerator("navigator:browser");
-    while (enumerator.hasMoreElements()) {
-      windows.push(enumerator.getNext());
+    try {
+      const enumerator = Services.wm.getEnumerator("navigator:browser");
+      while (enumerator.hasMoreElements()) {
+        try {
+          windows.push(enumerator.getNext());
+        } catch (e) {
+          // A window can disappear while the window manager enumerates it.
+          console.warn("[UserChrome Hot-Reload] Could not retrieve a browser window:", e);
+        }
+      }
+    } catch (e) {
+      // Keep callers from aborting the entire reload if enumeration fails.
+      console.error("[UserChrome Hot-Reload] Could not enumerate browser windows:", e);
     }
     return windows;
   }
