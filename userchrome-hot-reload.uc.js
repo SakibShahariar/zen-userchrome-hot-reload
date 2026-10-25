@@ -299,7 +299,13 @@
       }
     }
 
-    Services.obs.notifyObservers(null, "chrome-flush-caches", null);
+    try {
+      Services.obs.notifyObservers(null, "chrome-flush-caches", null);
+    } catch (e) {
+      // Sheet reloads have already been attempted; a cache-flush failure
+      // must not prevent the content stylesheet reload from running.
+      console.warn("[UserChrome Hot-Reload] Failed to flush chrome caches:", e);
+    }
     return loaded;
   }
 
