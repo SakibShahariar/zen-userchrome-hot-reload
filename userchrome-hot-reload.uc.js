@@ -27,6 +27,8 @@
   let lastModifiedTimes = new Map();
   let directoryCache = new Map();
   let pendingReload = null;
+  let reloadInProgress = false;
+  let reloadRequested = false;
   let tickInProgress = false;
   let watcherGeneration = 0;
   let initialScanComplete = false;
@@ -478,27 +480,44 @@
       return;
     }
 
-    console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
-    const chromeOk = reloadChromeSheets();
-    let contentOk = false;
-    try {
-      contentOk = await reloadContentSheets();
-    } catch (e) {
-      console.error("[UserChrome Hot-Reload] Content reload request failed:", e);
+    // A hotkey press can overlap a debounced file-change reload. Coalesce
+    // overlapping requests, then run one more pass to pick up changes that
+    // arrived while the active reload was in progress.
+    if (reloadInProgress) {
+      reloadRequested = true;
+      return;
     }
-    reloadSineMods();
+    reloadInProgress = true;
 
-    if (chromeOk && contentOk) {
-      showToast("UserChrome & Content reloaded");
-    } else if (chromeOk) {
-      console.error("[UserChrome Hot-Reload] UserChrome reloaded, but userContent.css failed to reload. Check the Browser Console.");
-      showToast("UserChrome reloaded; content reload failed. Check the Browser Console.");
-    } else if (contentOk) {
-      console.error("[UserChrome Hot-Reload] userContent.css reloaded, but userChrome.css failed to reload. Check the Browser Console.");
-      showToast("Content reloaded; UserChrome reload failed. Check the Browser Console.");
-    } else {
-      console.error("[UserChrome Hot-Reload] Both UserChrome and content reloads failed. Check the Browser Console.");
-      showToast("UserChrome and content reload failed. Check the Browser Console.");
+    try {
+      console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
+      const chromeOk = reloadChromeSheets();
+      let contentOk = false;
+      try {
+        contentOk = await reloadContentSheets();
+      } catch (e) {
+        console.error("[UserChrome Hot-Reload] Content reload request failed:", e);
+      }
+      reloadSineMods();
+
+      if (chromeOk && contentOk) {
+        showToast("UserChrome & Content reloaded");
+      } else if (chromeOk) {
+        console.error("[UserChrome Hot-Reload] UserChrome reloaded, but userContent.css failed to reload. Check the Browser Console.");
+        showToast("UserChrome reloaded; content reload failed. Check the Browser Console.");
+      } else if (contentOk) {
+        console.error("[UserChrome Hot-Reload] userContent.css reloaded, but userChrome.css failed to reload. Check the Browser Console.");
+        showToast("Content reloaded; UserChrome reload failed. Check the Browser Console.");
+      } else {
+        console.error("[UserChrome Hot-Reload] Both UserChrome and content reloads failed. Check the Browser Console.");
+        showToast("UserChrome and content reload failed. Check the Browser Console.");
+      }
+    } finally {
+      reloadInProgress = false;
+      if (reloadRequested) {
+        reloadRequested = false;
+        void reloadNow();
+      }
     }
   }
 
