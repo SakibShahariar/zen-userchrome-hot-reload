@@ -30,6 +30,7 @@
   let pollTimer = null;
   let watcherActive = false;
   let hotkeyRegistered = false;
+  let hotkeyListener = null;
 
   function getPref(type, name, fallback) {
     try {
@@ -375,7 +376,12 @@
   }
 
   function setupHotkey() {
-    if (hotkeyRegistered || !getPref("bool", PREF_ENABLED, true)) {
+    if (hotkeyListener) {
+      window.removeEventListener("keydown", hotkeyListener, true);
+      hotkeyListener = null;
+      hotkeyRegistered = false;
+    }
+    if (!getPref("bool", PREF_ENABLED, true)) {
       return;
     }
     const combo = getPref("string", PREF_HOTKEY, "").toUpperCase();
@@ -392,9 +398,7 @@
     const needsAlt = parts.includes("ALT");
     const needsMeta = parts.includes("META");
 
-    window.addEventListener(
-      "keydown",
-      (event) => {
+    hotkeyListener = (event) => {
         if (!getPref("bool", PREF_ENABLED, true)) {
           return;
         }
@@ -416,9 +420,8 @@
         event.preventDefault();
         event.stopPropagation();
         reloadNow();
-      },
-      true
-    );
+    };
+    window.addEventListener("keydown", hotkeyListener, true);
     hotkeyRegistered = true;
   }
 
@@ -479,6 +482,12 @@
     window.__userChromeHotReloadInitialized = false;
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+    Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
+    if (hotkeyListener) {
+      window.removeEventListener("keydown", hotkeyListener, true);
+      hotkeyListener = null;
+      hotkeyRegistered = false;
+    }
 
     if (!wasWatcher) {
       return;
@@ -508,6 +517,12 @@
       }
       clearInterval(pollTimer);
       pollTimer = setInterval(tick, getPollInterval());
+    },
+  };
+
+  const hotkeyPrefObserver = {
+    observe() {
+      setupHotkey();
     },
   };
 
@@ -553,6 +568,7 @@
   function init() {
     Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+    Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
