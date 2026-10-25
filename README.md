@@ -20,7 +20,7 @@ but for the browser UI. Its primary use case is live theming:
 
 1. **Watcher** — a single polling watcher monitors the profile `chrome/` directory (top-level `*.css` +
    `mods/*.css` by default; optional recursive scanning can include deeper CSS directories).
-   `sine-mods/`, `JS/`, and `utils/` are always excluded to avoid self-triggering loops.
+   Directories listed in the `excluded-dirs` preference are skipped; the defaults are `sine-mods/`, `JS/`, and `utils/` to avoid self-triggering loops.
    Ownership transfers to another open browser window if the watcher owner closes. Tracks mtimes
    via `IOUtils.stat`, default 500ms, debounced 300ms.
 2. **Chrome reload** — for every browser window: `windowUtils.removeSheet(uri, USER_SHEET)`
@@ -55,7 +55,8 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile; changes apply immediately. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch instead of the profile chrome dir. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
-| `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS; `sine-mods/`, `JS/`, and `utils/` remain excluded. |
+| `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS, respecting the excluded-directory list. |
+| `extensions.zen-userchrome-hot-reload.excluded-dirs` | `sine-mods,JS,utils` | Comma-separated directory names to skip while scanning. Leave empty to exclude none. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
 | `extensions.zen-userchrome-hot-reload.toast` | `true` | Show a Zen toast after each reload. |
 | `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload from any browser window. Empty disables. |
