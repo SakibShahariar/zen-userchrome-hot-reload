@@ -14,7 +14,7 @@ but for the browser UI. Its primary use case is live theming:
 
 ## Contents
 
-[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Notes / limitations](#notes--limitations) · [License](#license)
+[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Notes / limitations](#notes--limitations) · [License](#license)
 
 ## How it works
 
@@ -85,6 +85,18 @@ The profile `chrome/userChrome.css` must `@import` the generated file(s). If the
 Absolute paths also work when the files live elsewhere, but must be adjusted for your own profile and username.
 
 With this mod running, the next `matugen` run re-tints Zen and all open pages live.
+
+## Manual QA
+
+Run this checklist in Zen Browser before a release or after changes to the watcher:
+
+- [ ] Edit a profile chrome CSS file and confirm `userChrome.css` updates without restarting Zen.
+- [ ] Edit `userContent.css` and confirm existing tabs update; verify an iframe when available.
+- [ ] Regenerate or touch an imported `zen-userChrome.css` file and confirm the change triggers a reload.
+- [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
+- [ ] Trigger a manual reload with the configured hotkey.
+- [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
+- [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
 
 ## Notes / limitations
 
