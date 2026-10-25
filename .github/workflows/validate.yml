@@ -1,0 +1,30 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-config:
+    name: JavaScript syntax and JSON configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check userChrome script syntax
+        run: node --check userchrome-hot-reload.uc.js
+      - name: Check content actor syntax
+        run: node --check hot-reload-content.sys.mjs
+      - name: Validate preferences JSON
+        run: python -m json.tool preferences.json > /dev/null
+      - name: Validate theme JSON
+        run: python -m json.tool theme.json > /dev/null
