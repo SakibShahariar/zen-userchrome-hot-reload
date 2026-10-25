@@ -25,6 +25,7 @@
   const contentEntryPath = PathUtils.join(profileChromeDir, "userContent.css");
 
   let lastModifiedTimes = new Map();
+  let directoryCache = new Map();
   let pendingReload = null;
   let tickInProgress = false;
   let initialScanComplete = false;
@@ -81,40 +82,84 @@
     );
 
     async function scanDirectory(directory, recursive) {
-      let children;
+      let directoryStat;
       try {
-        children = await IOUtils.getChildren(directory);
+        directoryStat = await IOUtils.stat(directory);
       } catch (e) {
-        console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
+        directoryCache.delete(directory);
+        return;
+      }
+      if (directoryStat.type !== "directory") {
+        directoryCache.delete(directory);
         return;
       }
 
-      for (const child of children) {
+      const cached = directoryCache.get(directory);
+      const canReuse = cached &&
+        cached.lastModified === directoryStat.lastModified &&
+        cached.size === directoryStat.size;
+      let entries;
+      let refreshed = false;
+      if (canReuse) {
+        entries = cached.entries;
+      } else {
+        let children;
         try {
-          const childStat = await IOUtils.stat(child);
-          const baseName = PathUtils.filename(child);
-
-          if (childStat.type === "regular" && baseName.endsWith(".css")) {
-            paths.set(child, { lastModified: childStat.lastModified, size: childStat.size });
-            continue;
+          children = await IOUtils.getChildren(directory);
+        } catch (e) {
+          console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
+          directoryCache.delete(directory);
+          return;
+        }
+        entries = [];
+        for (const child of children) {
+          try {
+            const info = await IOUtils.stat(child);
+            entries.push({
+              path: child,
+              baseName: PathUtils.filename(child),
+              type: info.type,
+              lastModified: info.lastModified,
+              size: info.size,
+            });
+          } catch (e) {
+            // A child may disappear during a directory scan.
           }
+        }
+        directoryCache.set(directory, {
+          lastModified: directoryStat.lastModified,
+          size: directoryStat.size,
+          entries,
+        });
+        refreshed = true;
+      }
 
-          if (childStat.type !== "directory" || excludedDirectories.has(baseName)) {
-            continue;
+      for (const entry of entries) {
+        const child = entry.path;
+        const baseName = entry.baseName;
+        if (entry.type === "regular" && baseName.endsWith(".css")) {
+          try {
+            const info = refreshed ? entry : await IOUtils.stat(child);
+            paths.set(child, { lastModified: info.lastModified, size: info.size });
+          } catch (e) {
+            // A CSS file can disappear between polls.
           }
+          continue;
+        }
 
-          // Preserve the existing default: root CSS files and one level inside mods/.
-          if (!recursive) {
-            if (baseName === "mods") {
-              await scanDirectory(child, watchNested);
-            } else if (watchNested) {
-              await scanDirectory(child, true);
-            }
-          } else {
+        if (entry.type !== "directory" || excludedDirectories.has(baseName)) {
+          continue;
+        }
+
+        // Preserve the existing default: root CSS files and one level inside mods/.
+        if (!recursive) {
+          if (baseName === "mods") {
+            await scanDirectory(child, watchNested);
+          } else if (watchNested) {
             await scanDirectory(child, true);
           }
-        } catch (e) {
-          // A file can disappear while a scan is in progress; ignore that entry.
+        } else {
+          await scanDirectory(child, true);
         }
       }
     }
