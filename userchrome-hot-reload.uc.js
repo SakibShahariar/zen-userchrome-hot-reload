@@ -300,9 +300,25 @@
   }
 
   function collectBrowsingContexts(context, out = []) {
+    if (!context) {
+      return out;
+    }
     out.push(context);
-    for (const child of context.children) {
-      collectBrowsingContexts(child, out);
+
+    // Browsing contexts can be torn down while tabs navigate or close.
+    let children;
+    try {
+      children = context.children;
+    } catch (e) {
+      return out;
+    }
+
+    for (const child of children) {
+      try {
+        collectBrowsingContexts(child, out);
+      } catch (e) {
+        // Keep processing other frames if one disappears during traversal.
+      }
     }
     return out;
   }
@@ -327,16 +343,17 @@
           continue;
         }
         for (const context of collectBrowsingContexts(browsingContext)) {
-          const windowGlobal = context.currentWindowGlobal;
-          if (!windowGlobal) {
-            continue;
-          }
           try {
+            const windowGlobal = context.currentWindowGlobal;
+            if (!windowGlobal) {
+              continue;
+            }
             const actor = windowGlobal.getActor(ACTOR_NAME);
             if (actor) {
               requests.push(actor.sendQuery("update-sheets", { uri }));
             }
           } catch (e) {
+            // A frame may navigate or close between enumeration and dispatch.
             console.warn("[UserChrome Hot-Reload] Could not contact a content actor:", e);
           }
         }
