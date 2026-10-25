@@ -169,15 +169,18 @@
 
     try {
       if (!(await IOUtils.exists(root))) {
+        directoryCache.clear();
         return paths;
       }
 
       const stat = await IOUtils.stat(root);
       if (stat.type === "regular") {
+        directoryCache.clear();
         paths.set(root, { lastModified: stat.lastModified, size: stat.size });
         return paths;
       }
       if (stat.type !== "directory") {
+        directoryCache.clear();
         return paths;
       }
 
