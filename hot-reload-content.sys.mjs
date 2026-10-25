@@ -7,12 +7,12 @@ export class UserChromeHotReloadChild extends JSWindowActorChild {
     if (!uri) {
       return { ok: false, error: "Missing stylesheet URI" };
     }
-    const win = this.contentWindow;
-    const utils = win?.windowUtils;
-    if (!utils) {
-      return { ok: false, error: "Content window unavailable" };
-    }
     try {
+      const win = this.contentWindow;
+      const utils = win?.windowUtils;
+      if (!utils) {
+        return { ok: false, error: "Content window unavailable" };
+      }
       const sheetURI = Services.io.newURI(uri);
       try {
         utils.removeSheet(sheetURI, utils.USER_SHEET);
