@@ -283,14 +283,18 @@
 
     let loaded = false;
     for (const win of chromeWindows()) {
-      const utils = win.windowUtils;
       try {
-        utils.removeSheet(uri, utils.USER_SHEET);
-      } catch (e) {}
-      try {
+        const utils = win.windowUtils;
+        if (!utils) {
+          continue;
+        }
+        try {
+          utils.removeSheet(uri, utils.USER_SHEET);
+        } catch (e) {}
         utils.loadSheet(uri, utils.USER_SHEET);
         loaded = true;
       } catch (e) {
+        // A window may be closing; continue reloading the remaining windows.
         console.warn("[UserChrome Hot-Reload] Failed to reload chrome sheet:", e);
       }
     }
