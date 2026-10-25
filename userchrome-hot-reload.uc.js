@@ -71,7 +71,7 @@
   }
 
   async function collectCssFiles(root) {
-    const paths = [];
+    const paths = new Map();
     const watchNested = getPref("bool", PREF_NESTED, false);
     const excludedDirectories = new Set(
       getPref("string", PREF_EXCLUDED_DIRS, "sine-mods,JS,utils")
@@ -95,7 +95,7 @@
           const baseName = PathUtils.filename(child);
 
           if (childStat.type === "regular" && baseName.endsWith(".css")) {
-            paths.push(child);
+            paths.set(child, { lastModified: childStat.lastModified, size: childStat.size });
             continue;
           }
 
@@ -126,7 +126,7 @@
 
       const stat = await IOUtils.stat(root);
       if (stat.type === "regular") {
-        paths.push(root);
+        paths.set(root, { lastModified: stat.lastModified, size: stat.size });
         return paths;
       }
       if (stat.type !== "directory") {
@@ -147,41 +147,33 @@
     }
     tickInProgress = true;
     try {
-    const paths = await collectCssFiles(getWatchRoot());
+    const files = await collectCssFiles(getWatchRoot());
     if (!watcherActive) {
       return;
     }
-    const pathSet = new Set(paths);
 
     for (const cachedPath of lastModifiedTimes.keys()) {
-      if (!pathSet.has(cachedPath)) {
+      if (!files.has(cachedPath)) {
         lastModifiedTimes.delete(cachedPath);
       }
     }
 
     let changed = false;
-    for (const path of paths) {
-      try {
-        const info = await IOUtils.stat(path);
-        const previous = lastModifiedTimes.get(path);
-        const current = {
-          lastModified: info.lastModified,
-          size: info.size,
-        };
-        if (previous === undefined) {
-          lastModifiedTimes.set(path, current);
-          if (initialScanComplete) {
-            changed = true;
-          }
-        } else if (
-          typeof previous !== "object" ||
-          previous.lastModified !== current.lastModified ||
-          previous.size !== current.size
-        ) {
-          lastModifiedTimes.set(path, current);
+    for (const [path, current] of files) {
+      const previous = lastModifiedTimes.get(path);
+      if (previous === undefined) {
+        lastModifiedTimes.set(path, current);
+        if (initialScanComplete) {
           changed = true;
         }
-      } catch (e) {}
+      } else if (
+        typeof previous !== "object" ||
+        previous.lastModified !== current.lastModified ||
+        previous.size !== current.size
+      ) {
+        lastModifiedTimes.set(path, current);
+        changed = true;
+      }
     }
 
     initialScanComplete = true;
