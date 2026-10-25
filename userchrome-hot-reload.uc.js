@@ -115,21 +115,25 @@
           directoryCache.delete(directory);
           return;
         }
-        entries = [];
-        for (const child of children) {
-          try {
-            const info = await IOUtils.stat(child);
-            entries.push({
-              path: child,
-              baseName: PathUtils.filename(child),
-              type: info.type,
-              lastModified: info.lastModified,
-              size: info.size,
-            });
-          } catch (e) {
-            // A child may disappear during a directory scan.
-          }
-        }
+        entries = (
+          await Promise.all(
+            children.map(async (child) => {
+              try {
+                const info = await IOUtils.stat(child);
+                return {
+                  path: child,
+                  baseName: PathUtils.filename(child),
+                  type: info.type,
+                  lastModified: info.lastModified,
+                  size: info.size,
+                };
+              } catch (e) {
+                // A child may disappear during a directory scan.
+                return null;
+              }
+            })
+          )
+        ).filter(Boolean);
         directoryCache.set(directory, {
           lastModified: directoryStat.lastModified,
           size: directoryStat.size,
@@ -138,15 +142,31 @@
         refreshed = true;
       }
 
+      const cssEntries = entries.filter(
+        (entry) => entry.type === "regular" && entry.baseName.endsWith(".css")
+      );
+      const cssStats = await Promise.all(
+        cssEntries.map(async (entry) => {
+          if (refreshed) {
+            return [entry.path, entry];
+          }
+          try {
+            return [entry.path, await IOUtils.stat(entry.path)];
+          } catch (e) {
+            // A CSS file can disappear between polls.
+            return [entry.path, null];
+          }
+        })
+      );
+      const cssInfoByPath = new Map(cssStats);
+
       for (const entry of entries) {
         const child = entry.path;
         const baseName = entry.baseName;
         if (entry.type === "regular" && baseName.endsWith(".css")) {
-          try {
-            const info = refreshed ? entry : await IOUtils.stat(child);
+          const info = cssInfoByPath.get(child);
+          if (info) {
             paths.set(child, { lastModified: info.lastModified, size: info.size });
-          } catch (e) {
-            // A CSS file can disappear between polls.
           }
           continue;
         }
