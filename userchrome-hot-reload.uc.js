@@ -307,6 +307,7 @@
       const win = Services.wm.getMostRecentWindow("navigator:browser");
       const manager = win?.gZenUIManager;
       if (!manager?.showToast) {
+        console.warn("[UserChrome Hot-Reload] Zen toast API unavailable; reload status is in the Browser Console.");
         return;
       }
 
@@ -323,6 +324,8 @@
         label.removeAttribute("data-l10n-id");
         label.removeAttribute("data-l10n-args");
         label.setAttribute("value", message);
+      } else {
+        console.warn("[UserChrome Hot-Reload] Zen toast label unavailable; reload status:", message);
       }
       toastPromise?.catch((e) => {
         console.warn("[UserChrome Hot-Reload] Failed to show toast:", e);
@@ -349,9 +352,15 @@
 
     if (chromeOk && contentOk) {
       showToast("UserChrome & Content reloaded");
+    } else if (chromeOk) {
+      console.error("[UserChrome Hot-Reload] UserChrome reloaded, but userContent.css failed to reload. Check the Browser Console.");
+      showToast("UserChrome reloaded; content reload failed. Check the Browser Console.");
+    } else if (contentOk) {
+      console.error("[UserChrome Hot-Reload] userContent.css reloaded, but userChrome.css failed to reload. Check the Browser Console.");
+      showToast("Content reloaded; UserChrome reload failed. Check the Browser Console.");
     } else {
-      console.error("[UserChrome Hot-Reload] Reload incomplete. Check the browser console for details.");
-      showToast("UserChrome reload failed. Check the browser console.");
+      console.error("[UserChrome Hot-Reload] Both UserChrome and content reloads failed. Check the Browser Console.");
+      showToast("UserChrome and content reload failed. Check the Browser Console.");
     }
   }
 
