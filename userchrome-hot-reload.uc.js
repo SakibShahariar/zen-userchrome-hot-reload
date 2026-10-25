@@ -338,11 +338,34 @@
 
     const requests = [];
     for (const win of chromeWindows()) {
-      if (!win.gBrowser) {
+      let tabs;
+      try {
+        tabs = win.gBrowser?.tabs;
+      } catch (e) {
+        // A browser window may be tearing down; continue with other windows.
+        console.warn("[UserChrome Hot-Reload] Could not enumerate browser tabs:", e);
         continue;
       }
-      for (const tab of win.gBrowser.tabs) {
-        const browsingContext = tab.linkedBrowser?.browsingContext;
+      if (!tabs) {
+        continue;
+      }
+
+      let tabList;
+      try {
+        tabList = Array.from(tabs);
+      } catch (e) {
+        console.warn("[UserChrome Hot-Reload] Could not snapshot browser tabs:", e);
+        continue;
+      }
+
+      for (const tab of tabList) {
+        let browsingContext;
+        try {
+          browsingContext = tab.linkedBrowser?.browsingContext;
+        } catch (e) {
+          // A tab may close between enumeration and dispatch.
+          continue;
+        }
         if (!browsingContext) {
           continue;
         }
