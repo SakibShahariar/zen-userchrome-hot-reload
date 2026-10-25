@@ -497,6 +497,9 @@
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
     Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
+    Services.prefs.removeObserver(PREF_PATH, watchConfigPrefObserver);
+    Services.prefs.removeObserver(PREF_NESTED, watchConfigPrefObserver);
+    Services.prefs.removeObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
     if (hotkeyListener) {
       window.removeEventListener("keydown", hotkeyListener, true);
       hotkeyListener = null;
@@ -531,6 +534,13 @@
       }
       clearInterval(pollTimer);
       pollTimer = setInterval(tick, getPollInterval());
+    },
+  };
+
+  const watchConfigPrefObserver = {
+    observe() {
+      // Re-scan immediately without creating another polling timer.
+      tick();
     },
   };
 
@@ -583,6 +593,9 @@
     Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
     Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
+    Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
+    Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
+    Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
