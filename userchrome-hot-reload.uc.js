@@ -28,6 +28,7 @@
   let directoryCache = new Map();
   let pendingReload = null;
   let tickInProgress = false;
+  let watcherGeneration = 0;
   let initialScanComplete = false;
   let pollTimer = null;
   let watcherActive = false;
@@ -204,9 +205,10 @@
       return;
     }
     tickInProgress = true;
+    const generation = watcherGeneration;
     try {
     const files = await collectCssFiles(getWatchRoot());
-    if (!watcherActive) {
+    if (!watcherActive || generation !== watcherGeneration) {
       return;
     }
 
@@ -498,6 +500,7 @@
       lastModifiedTimes = previousTimes;
     }
     initialScanComplete = wasInitialized;
+    watcherGeneration += 1;
     watcherActive = true;
 
     registerContentActor();
@@ -515,6 +518,7 @@
     const wasWatcher = watcherActive || pollTimer !== null;
     const forceReloadOnHandoff = pendingReload !== null;
 
+    watcherGeneration += 1;
     watcherActive = false;
     if (pollTimer !== null) {
       clearInterval(pollTimer);
@@ -534,6 +538,7 @@
     const wasWatcher = watcherActive;
     const forceReloadOnHandoff = pendingReload !== null;
 
+    watcherGeneration += 1;
     watcherActive = false;
     if (pollTimer !== null) {
       clearInterval(pollTimer);
