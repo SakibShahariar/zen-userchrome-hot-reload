@@ -588,11 +588,19 @@
     if (!combo) {
       return;
     }
-    const parts = combo.split("+").map((p) => p.trim()).filter(Boolean);
-    if (parts.length < 2) {
+    const parts = combo.split("+").map((part) => part.trim());
+    if (parts.length === 0 || parts.some((part) => !part)) {
       return;
     }
     const key = parts.pop();
+    if (!key || ["CTRL", "SHIFT", "ALT", "META"].includes(key)) {
+      return;
+    }
+    if (parts.length === 0 && key.length === 1) {
+      console.warn(
+        "[UserChrome Hot-Reload] A single-character hotkey may conflict with browser shortcuts or text entry; prefer a function key or modifier combination."
+      );
+    }
     const needsCtrl = parts.includes("CTRL");
     const needsShift = parts.includes("SHIFT");
     const needsAlt = parts.includes("ALT");
