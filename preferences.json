@@ -40,7 +40,7 @@
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.watch-path",
     "label": "Custom Watch Path",
-    "description": "Absolute path to a file or directory to watch. Leave empty to watch the default profile chrome dir (~/.zen/<profile>/chrome).",
+    "description": "Absolute path to a file or directory to watch. Leave empty to use this profile's chrome directory; the resolved effective path appears in debug logs.",
     "defaultValue": ""
   },
   {
@@ -75,13 +75,14 @@
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.reload-sine-mods",
     "label": "Rebuild Sine mods too",
-    "description": "Also calls Sine's manager.rebuildMods() so Sine-managed themes refresh in sync.",
+    "description": "Also calls Sine's manager.rebuildMods() so Sine-managed themes refresh in sync. CSS reload continues if Sine is unavailable.",
     "defaultValue": true
   },
   {
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.toast",
     "label": "Show a toast on each reload",
+    "description": "Show a concise Zen toast after reloads. Detailed diagnostics remain in the Browser Console.",
     "defaultValue": true
   },
   {
@@ -93,7 +94,7 @@
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.hotkey",
     "label": "Hotkey",
-    "description": "Combo to force a reload anytime (e.g. Ctrl+Shift+F5). Leave empty to disable.",
+    "description": "Combo to force a reload anytime (e.g. Ctrl+Shift+F5, F5, or Cmd+Shift+F5). Leave empty to disable.",
     "defaultValue": "Ctrl+Shift+F5"
   }
 ]
