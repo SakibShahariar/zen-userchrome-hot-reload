@@ -363,7 +363,7 @@
 
     function skipWhitespaceAndComments() {
       while (index < cssText.length) {
-        if (/\\s/.test(cssText[index])) {
+        if (/\s/.test(cssText[index])) {
           index += 1;
           continue;
         }
@@ -394,7 +394,7 @@
         }
         // CSS escapes need decoding before path resolution. Fall back rather
         // than guessing which file an escaped import refers to.
-        if (char === "\\\\" || char === "\\n" || char === "\\r" || char === "\\f") {
+        if (char === "\\" || char === "\n" || char === "\r" || char === "\f") {
           return null;
         }
         value += char;
@@ -417,7 +417,7 @@
         index += 1;
         while (index < cssText.length) {
           const char = cssText[index++];
-          if (char === "\\\\" && index < cssText.length) {
+          if (char === "\\" && index < cssText.length) {
             index += 1;
           } else if (char === quote) {
             break;
@@ -429,7 +429,7 @@
       if (
         current !== "@" ||
         cssText.slice(index, index + 7).toLowerCase() !== "@import" ||
-        /[\\w-]/.test(cssText[index + 7] ?? "")
+        /[\w-]/.test(cssText[index + 7] ?? "")
       ) {
         index += 1;
         continue;
@@ -457,8 +457,7 @@
         } else {
           const start = index;
           while (index < cssText.length && cssText[index] !== ")") {
-            const char = cssText[index];
-            if (/\\s/.test(char) || char === "\\\\" || char === "\"" || char === "'") {
+            if (cssText[index] === "\\") {
               return null;
             }
             index += 1;
@@ -466,7 +465,10 @@
           if (index >= cssText.length) {
             return null;
           }
-          target = cssText.slice(start, index);
+          target = cssText.slice(start, index).trim();
+          if (!target || /\s/.test(target) || target.includes("\"") || target.includes("'")) {
+            return null;
+          }
           index += 1;
         }
       } else {
@@ -482,7 +484,7 @@
   }
 
   function resolveLocalCssImport(importPath, sourcePath) {
-    if (/^(?:https?:|data:|chrome:|resource:|moz-extension:|\\/\\/)/i.test(importPath)) {
+    if (/^(?:https?:|data:|chrome:|resource:|moz-extension:|\/\/)/i.test(importPath)) {
       return null;
     }
     const baseURI = Services.io.newURI(PathUtils.toFileURI(sourcePath));
