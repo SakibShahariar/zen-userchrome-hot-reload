@@ -76,6 +76,7 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile; changes apply immediately. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch; leave empty to use the profile chrome directory. Invalid or unreadable paths are reported in the Browser Console rather than silently replaced. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
+| `extensions.zen-userchrome-hot-reload.reload-debounce-ms` | `300` | Delay after the latest detected change before reloading; clamped to 50–2000 ms and applied immediately to a pending reload. |
 | `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS, respecting the excluded-directory list. |
 | `extensions.zen-userchrome-hot-reload.excluded-dirs` | `sine-mods,JS,utils` | Comma-separated directory names to skip while scanning. Leave empty to exclude none. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
@@ -123,6 +124,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Verify `META`, `CMD`, and `SUPER` modifier spellings trigger the same platform Meta key behavior.
 - [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
 - [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
+- [ ] Change the reload debounce while a reload is pending; confirm the timer is rescheduled once and invalid values fall back safely or clamp to the documented bounds.
 - [ ] With nested watching enabled, create a directory symlink back to an ancestor; confirm scanning remains bounded, normal nested CSS is still found, and a warning identifies the skipped path.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
 
