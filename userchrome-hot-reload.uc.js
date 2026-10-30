@@ -36,6 +36,7 @@
   let watcherActive = false;
   let hotkeyRegistered = false;
   let hotkeyListener = null;
+  let lastWatchRootError = null;
 
   function getPref(type, name, fallback) {
     try {
@@ -57,6 +58,18 @@
 
   function getWatchRoot() {
     return getPref("string", PREF_PATH, "") || profileChromeDir;
+  }
+
+  function reportWatchRootError(root, error) {
+    const message = String(error);
+    const key = `${root}\n${message}`;
+    if (lastWatchRootError === key) {
+      return;
+    }
+    lastWatchRootError = key;
+    console.error(
+      `[UserChrome Hot-Reload] Watch path "${root}" is unavailable or unreadable: ${message}. Clear the watch-path preference to use the profile chrome directory, or configure an existing file or directory.`
+    );
   }
 
   function getPollInterval() {
@@ -104,6 +117,9 @@
         directoryStat = await IOUtils.stat(directory);
       } catch (e) {
         directoryCache.delete(directory);
+        if (directory === root) {
+          reportWatchRootError(directory, e);
+        }
         return;
       }
       if (directoryStat.type !== "directory") {
@@ -124,8 +140,12 @@
         try {
           children = await IOUtils.getChildren(directory);
         } catch (e) {
-          console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
           directoryCache.delete(directory);
+          if (directory === root) {
+            reportWatchRootError(directory, e);
+          } else {
+            console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
+          }
           return;
         }
         entries = (
@@ -202,22 +222,20 @@
     }
 
     try {
-      if (!(await IOUtils.exists(root))) {
-        directoryCache.clear();
-        return paths;
-      }
-
       const stat = await IOUtils.stat(root);
       if (stat.type === "regular") {
         directoryCache.clear();
+        lastWatchRootError = null;
         paths.set(root, { lastModified: stat.lastModified, size: stat.size });
         return paths;
       }
       if (stat.type !== "directory") {
         directoryCache.clear();
+        reportWatchRootError(root, `expected a file or directory, found ${stat.type}`);
         return paths;
       }
 
+      lastWatchRootError = null;
       await scanDirectory(root, false);
 
       // Drop cache entries for directories removed or excluded since the last poll.
@@ -227,7 +245,8 @@
         }
       }
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Failed to scan watch path:", e);
+      directoryCache.clear();
+      reportWatchRootError(root, e);
     }
 
     return paths;
