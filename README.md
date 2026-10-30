@@ -138,10 +138,13 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
 - [ ] Change the reload debounce while a reload is pending; confirm the timer is rescheduled once and invalid values fall back safely or clamp to the documented bounds.
 - [ ] With nested watching enabled, create a directory symlink back to an ancestor; confirm scanning remains bounded, normal nested CSS is still found, and a warning identifies the skipped path.
+- [ ] Simulate or reproduce a chrome stylesheet load failure in one browser window; confirm a partial failure is reported even if another window reloads successfully. Check the Browser Console for CSS parser diagnostics.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
 - [ ] Try blank, non-numeric, below-range, and above-range poll/debounce values; verify documented defaults and clamps. Try malformed hotkeys and exclusion paths; confirm clear warnings and valid legacy values still work.
 
 ## Troubleshooting
+
+A thrown `loadSheet` error or chrome-cache flush failure is reported as a failed reload rather than a success. Content actor failures include the `userContent.css` path and failed-document count. Gecko may report CSS parser warnings separately without throwing from `loadSheet`; inspect the Browser Console for those parser diagnostics.
 
 - **Sine integration unavailable:** CSS watching and stylesheet reloads continue, but Sine-managed mods are not rebuilt. Install or enable Sine, keep `sine.allow-unsafe-js` enabled, then restart Zen or toggle the mod off and on.
 - **Sine settings are missing:** confirm `preferences.json` exists in the mod root and reload the mod in Sine. Without that schema, built-in defaults still work but the Sine settings controls are unavailable.
