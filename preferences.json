@@ -30,6 +30,13 @@
     "defaultValue": true
   },
   {
+    "type": "checkbox",
+    "property": "extensions.zen-userchrome-hot-reload.debug-logging",
+    "label": "Enable local debug logging",
+    "description": "Log scan results, changed CSS files, reload outcomes, actor failures, and watcher handoffs to the Browser Console. Logs may contain local file paths; no data is sent remotely.",
+    "defaultValue": false
+  },
+  {
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.watch-path",
     "label": "Custom Watch Path",
