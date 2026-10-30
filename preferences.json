@@ -47,7 +47,7 @@
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.poll-interval-ms",
     "label": "Poll Interval (ms)",
-    "description": "How often the file watcher checks for changes.",
+    "description": "How often the file watcher checks for changes. Values are clamped to 200–5000 ms; default is 500 ms.",
     "defaultValue": "500"
   },
   {
@@ -68,7 +68,7 @@
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.excluded-dirs",
     "label": "Excluded Directories",
-    "description": "Comma-separated directory names to skip while scanning CSS. Defaults to sine-mods,JS,utils. Leave empty to exclude none.",
+    "description": "Comma-separated single directory names to skip while scanning CSS. Entries containing slashes or dot segments are ignored. Defaults to sine-mods,JS,utils; leave empty to exclude none.",
     "defaultValue": "sine-mods,JS,utils"
   },
   {
