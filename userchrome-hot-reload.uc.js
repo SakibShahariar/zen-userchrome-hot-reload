@@ -361,7 +361,12 @@
       changedFileCount: changedFiles?.length ?? 0,
     });
     if (changedFiles?.length) {
-      debugLog("CSS file changes detected", changedFiles);
+      const visibleChanges = changedFiles.slice(0, 20);
+      debugLog("CSS file changes detected", {
+        total: changedFiles.length,
+        files: visibleChanges,
+        omitted: changedFiles.length - visibleChanges.length,
+      });
     }
 
     initialScanComplete = true;
