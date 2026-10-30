@@ -20,7 +20,7 @@ export class UserChromeHotReloadChild extends JSWindowActorChild {
       utils.loadSheet(sheetURI, utils.USER_SHEET);
       return { ok: true };
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Failed to reload content sheet:", e);
+      console.error("[UserChrome Hot-Reload] Failed to reload userContent.css:", uri, e);
       return { ok: false, error: String(e) };
     }
   }
