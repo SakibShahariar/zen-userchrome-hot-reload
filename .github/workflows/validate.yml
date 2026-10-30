@@ -24,6 +24,8 @@ jobs:
         run: node --check userchrome-hot-reload.uc.js
       - name: Check content actor syntax
         run: node --check hot-reload-content.sys.mjs
+      - name: Run automated tests
+        run: node --test tests/*.test.mjs
       - name: Validate preferences JSON
         run: python -m json.tool preferences.json > /dev/null
       - name: Validate theme JSON
