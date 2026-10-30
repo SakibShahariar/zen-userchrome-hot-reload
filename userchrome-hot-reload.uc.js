@@ -772,13 +772,16 @@
     hotkeyRegistered = true;
   }
 
-  function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false) {
+  function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false, previousChangedFiles = null) {
     if (!getPref("bool", PREF_ENABLED, true) || watcherActive || pollTimer !== null) {
       return;
     }
 
     if (previousTimes instanceof Map) {
       lastModifiedTimes = previousTimes;
+    }
+    if (previousChangedFiles instanceof Map) {
+      pendingChangedFiles = previousChangedFiles;
     }
     initialScanComplete = wasInitialized;
     watcherGeneration += 1;
@@ -812,7 +815,7 @@
 
     debugLog("Watcher yielded", { wasWatcher, forceReloadOnHandoff });
     return wasWatcher
-      ? { lastModifiedTimes, initialScanComplete, forceReloadOnHandoff }
+      ? { lastModifiedTimes, initialScanComplete, forceReloadOnHandoff, pendingChangedFiles }
       : null;
   }
 
@@ -860,7 +863,8 @@
       nextWindow.__userChromeHotReloadStartWatcher(
         lastModifiedTimes,
         initialScanComplete,
-        forceReloadOnHandoff
+        forceReloadOnHandoff,
+        pendingChangedFiles
       );
     } else {
       debugLog("No other browser window available for watcher handoff");
@@ -937,7 +941,8 @@
         startWatcher(
           inheritedState.lastModifiedTimes,
           inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff
+          inheritedState.forceReloadOnHandoff,
+          inheritedState.pendingChangedFiles
         );
       } else {
         startWatcher();
@@ -980,7 +985,8 @@
         startWatcher(
           inheritedState.lastModifiedTimes,
           inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff
+          inheritedState.forceReloadOnHandoff,
+          inheritedState.pendingChangedFiles
         );
       } else {
         startWatcher();
