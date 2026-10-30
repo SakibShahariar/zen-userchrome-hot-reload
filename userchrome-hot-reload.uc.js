@@ -47,6 +47,7 @@
   let hotkeyRegistered = false;
   let hotkeyListener = null;
   let lastWatchRootError = null;
+  let lastExcludedDirsWarning = null;
   let lastDirectoryScanWarning = null;
 
   function getPref(type, name, fallback) {
@@ -90,9 +91,47 @@
   }
 
   function getPollInterval() {
-    const configured = getPref("string", PREF_INTERVAL, "500");
-    const interval = Number.parseInt(configured, 10);
-    return Number.isFinite(interval) && interval > 0 ? Math.max(200, interval) : 500;
+    const raw = getPref("string", PREF_INTERVAL, "500");
+    if (raw === "") {
+      return 500;
+    }
+    const interval = Number(raw);
+    if (!Number.isInteger(interval)) {
+      return 500;
+    }
+    return Math.min(5000, Math.max(200, interval));
+  }
+
+  function getExcludedDirectories() {
+    const raw = getPref("string", PREF_EXCLUDED_DIRS, "sine-mods,JS,utils");
+    const excluded = new Set();
+    const invalid = [];
+
+    for (const entry of raw.split(",")) {
+      const name = entry.trim();
+      if (!name) {
+        continue;
+      }
+      if (name === "." || name === ".." || /[\\/:\0]/.test(name)) {
+        invalid.push(name);
+        continue;
+      }
+      excluded.add(name);
+    }
+
+    if (invalid.length) {
+      const warningKey = `${raw}:${invalid.join(",")}`;
+      if (lastExcludedDirsWarning !== warningKey) {
+        lastExcludedDirsWarning = warningKey;
+        console.warn(
+          "[UserChrome Hot-Reload] Ignoring invalid excluded directory names; use single directory names without slashes or dot segments:",
+          invalid
+        );
+      }
+    } else {
+      lastExcludedDirsWarning = null;
+    }
+    return excluded;
   }
 
   function getReloadDebounce() {
@@ -132,12 +171,7 @@
     const scanTime = Date.now();
     const DIRECTORY_CACHE_REVALIDATION_MS = 10000;
     const watchNested = getPref("bool", PREF_NESTED, false);
-    const excludedDirectories = new Set(
-      getPref("string", PREF_EXCLUDED_DIRS, "sine-mods,JS,utils")
-        .split(",")
-        .map((name) => name.trim())
-        .filter(Boolean)
-    );
+    const excludedDirectories = getExcludedDirectories();
 
     const visitedDirectories = new Set();
     const MAX_DIRECTORY_SCAN_DEPTH = 64;
@@ -790,21 +824,36 @@
     }
     const parts = combo.split("+").map((part) => part.trim());
     if (parts.length === 0 || parts.some((part) => !part)) {
+      console.warn("[UserChrome Hot-Reload] Invalid hotkey: empty key or modifier segment. Use a format such as Ctrl+Shift+F5.");
       return;
     }
     const key = parts.pop();
-    if (!key || ["CTRL", "SHIFT", "ALT", "META"].includes(key)) {
+    const modifierNames = new Set(["CTRL", "SHIFT", "ALT", "META", "CMD", "SUPER"]);
+    if (!key || modifierNames.has(key)) {
+      console.warn("[UserChrome Hot-Reload] Invalid hotkey: a non-modifier key must follow the modifier combination.");
       return;
     }
-    if (parts.length === 0 && key.length === 1) {
+    const normalizedModifiers = parts.map((part) =>
+      part === "CMD" || part === "SUPER" ? "META" : part
+    );
+    const validModifiers = new Set(["CTRL", "SHIFT", "ALT", "META"]);
+    if (normalizedModifiers.some((part) => !validModifiers.has(part))) {
+      console.warn("[UserChrome Hot-Reload] Invalid hotkey: unknown modifier. Supported modifiers are Ctrl, Shift, Alt, Meta, Cmd, and Super.");
+      return;
+    }
+    if (new Set(normalizedModifiers).size !== normalizedModifiers.length) {
+      console.warn("[UserChrome Hot-Reload] Invalid hotkey: duplicate modifier.");
+      return;
+    }
+    if (normalizedModifiers.length === 0 && key.length === 1) {
       console.warn(
         "[UserChrome Hot-Reload] A single-character hotkey may conflict with browser shortcuts or text entry; prefer a function key or modifier combination."
       );
     }
-    const needsCtrl = parts.includes("CTRL");
-    const needsShift = parts.includes("SHIFT");
-    const needsAlt = parts.includes("ALT");
-    const needsMeta = parts.some((part) => ["META", "CMD", "SUPER"].includes(part));
+    const needsCtrl = normalizedModifiers.includes("CTRL");
+    const needsShift = normalizedModifiers.includes("SHIFT");
+    const needsAlt = normalizedModifiers.includes("ALT");
+    const needsMeta = normalizedModifiers.includes("META");
 
     hotkeyListener = (event) => {
         if (!getPref("bool", PREF_ENABLED, true)) {
