@@ -22,6 +22,7 @@ but for the browser UI. Its primary use case is live theming:
    `mods/*.css` by default; optional recursive scanning can include deeper CSS directories).
    Directories listed in the `excluded-dirs` preference are skipped; the defaults are `sine-mods/`, `JS/`, and `utils/` to avoid self-triggering loops.
    Recursive scans skip repeated directory paths and stop beyond 64 directory levels to bound symlink cycles.
+   Cached directory listings are revalidated at least every 10 seconds even if directory metadata appears unchanged; CSS file metadata is still checked on each poll.
    Ownership transfers to another open browser window if the watcher owner closes. Tracks mtimes
    via `IOUtils.stat`, default 500ms, debounced 300ms.
 2. **Chrome reload** — for every browser window: `windowUtils.removeSheet(uri, USER_SHEET)`
@@ -115,6 +116,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Verify a cross-origin content iframe is refreshed when eligible; confirm privileged browser UI is excluded and unavailable frames do not prevent other documents from updating.
 - [ ] Regenerate or touch an imported `zen-userChrome.css` file and confirm the change triggers a reload.
 - [ ] Remove or rename a tracked imported CSS file and confirm the entrypoint reload removes stale imported styles.
+- [ ] Replace a tracked CSS file atomically and add/remove files in a watched directory; confirm file metadata changes are detected on the next poll and directory listing changes are found by the periodic revalidation.
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
