@@ -1341,4 +1341,60 @@
     const prefsAvailable = typeof Services !== "undefined" && typeof Services.prefs?.addObserver === "function";
     if (prefsAvailable) {
       Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
-      Services.prefs.add
+      Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
+      Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+      Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
+      Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
+      Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
+      Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
+      Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    } else {
+      console.error("[UserChrome Hot-Reload] Preference observers unavailable; settings changes will not be applied until restart.");
+    }
+    setupReloadMenuItem();
+    setupHotkey();
+    window.__userChromeHotReloadStartWatcher = startWatcher;
+    window.__userChromeHotReloadYieldWatcher = yieldWatcher;
+    window.addEventListener("beforeunload", cleanupWindow, { once: true });
+
+    // If a newly opened window becomes most recent, transfer watcher state
+    // from any existing owner before starting its own poller.
+    if (window === mostRecentWindow && !getPref("bool", PREF_PAUSED, false)) {
+      let inheritedState = window.__userChromeHotReloadPausedState || null;
+      delete window.__userChromeHotReloadPausedState;
+      for (const otherWindow of chromeWindows()) {
+        if (otherWindow === window || otherWindow.closed) {
+          continue;
+        }
+        const pausedState = otherWindow.__userChromeHotReloadPausedState;
+        if (pausedState) {
+          if (!inheritedState) {
+            inheritedState = pausedState;
+          }
+          delete otherWindow.__userChromeHotReloadPausedState;
+          continue;
+        }
+        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
+          continue;
+        }
+        const state = otherWindow.__userChromeHotReloadYieldWatcher();
+        if (!inheritedState && state) {
+          inheritedState = state;
+        }
+      }
+
+      if (inheritedState) {
+        startWatcher(
+          inheritedState.lastModifiedTimes,
+          inheritedState.initialScanComplete,
+          inheritedState.forceReloadOnHandoff,
+          inheritedState.pendingChangedFiles
+        );
+      } else {
+        startWatcher();
+      }
+    }
+  }
+
+  init();
+})();
