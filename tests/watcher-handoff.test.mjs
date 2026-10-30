@@ -20,16 +20,41 @@ function createHarness() {
   let nextTimerId = 1;
   let children = [];
   let cssModified = 1;
+  let sineMetadataModified = 1;
+  let sineStyleModified = 1;
+  let sineModsData = {
+    "test-mod": {
+      enabled: true,
+      style: { chrome: "theme.css" },
+    },
+  };
+  const rebuildCalls = [];
 
   const io = {
     async stat(path) {
       if (path === "/profile/chrome") {
         return { type: "directory", lastModified: 1, size: children.length };
       }
+      if (path === "/profile/chrome/sine-mods/mods.json") {
+        return {
+          type: "regular",
+          lastModified: sineMetadataModified,
+          size: JSON.stringify(sineModsData).length,
+        };
+      }
+      if (path === "/profile/chrome/sine-mods/test-mod/theme.css") {
+        return { type: "regular", lastModified: sineStyleModified, size: 20 };
+      }
       if (children.includes(path)) {
         return { type: "regular", lastModified: cssModified, size: 10 };
       }
       throw new Error("Path not found: " + path);
+    },
+    async readJSON(path) {
+      if (path !== "/profile/chrome/sine-mods/mods.json") {
+        throw new Error("Unexpected JSON path: " + path);
+      }
+      return structuredClone(sineModsData);
     },
     async getChildren() {
       return [...children];
@@ -142,6 +167,29 @@ function createHarness() {
       children = [...paths];
       cssModified += 1;
     },
+    modifySineStyle() {
+      sineStyleModified += 1;
+    },
+    modifySineMetadata(nextData) {
+      sineModsData = nextData;
+      sineMetadataModified += 1;
+    },
+    setManager(win) {
+      win.manager = {
+        async rebuildMods(...args) {
+          rebuildCalls.push(args);
+          return true;
+        },
+      };
+    },
+    rebuildCalls,
+    async runDebouncedReload() {
+      const pending = [...timeouts.values()];
+      assert.ok(pending.length > 0, "expected a pending debounced reload");
+      timeouts.clear();
+      for (const timer of pending) timer.callback();
+      await flushAsyncWork();
+    },
     runPollFor(win) {
       const timer = [...intervals.values()].find((entry) => entry.window === win);
       assert.ok(timer, "expected this window to own the poll interval");
@@ -215,4 +263,44 @@ test("pause, resume, disable, and re-enable keep one watcher across windows", as
   assert.equal(harness.activePollers(), 1, "re-enabling should start only one poller");
   assert.equal(second.__userChromeHotReloadIsWatcherOwner, true);
   assert.equal(first.__userChromeHotReloadIsWatcherOwner, false);
+});
+
+
+test("Sine rebuilds only for its tracked styles and never reloads mod JavaScript", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setManager(win);
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-sine-mods", true);
+  await harness.flushAsyncWork();
+
+  harness.setCssFiles(["/profile/chrome/theme.css"]);
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.equal(harness.rebuildCalls.length, 0,
+    "ordinary profile CSS changes should not rebuild Sine when metadata is available");
+
+  harness.modifySineStyle();
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.deepEqual(harness.rebuildCalls, [[false, true]],
+    "Sine stylesheet changes should rebuild styles without reloading mod scripts");
+});
+
+test("Sine metadata changes trigger a rebuild and refresh the tracked style paths", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setManager(win);
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-sine-mods", true);
+  await harness.flushAsyncWork();
+
+  harness.modifySineMetadata({
+    "test-mod": { enabled: true, style: { chrome: "new-theme.css" } },
+  });
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.deepEqual(harness.rebuildCalls, [[false, true]],
+    "changing Sine's mod metadata should rebuild its generated styles");
 });
