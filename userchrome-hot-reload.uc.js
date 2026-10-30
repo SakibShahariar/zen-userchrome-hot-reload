@@ -1,7 +1,10 @@
 (function () {
   "use strict";
 
-  const mostRecentWindow = Services.wm.getMostRecentWindow("navigator:browser");
+  const mostRecentWindow =
+    typeof Services !== "undefined" && typeof Services.wm?.getMostRecentWindow === "function"
+      ? Services.wm.getMostRecentWindow("navigator:browser")
+      : null;
   if (window.__userChromeHotReloadInitialized) {
     return;
   }
@@ -45,6 +48,9 @@
   let initialScanComplete = false;
   let pollTimer = null;
   let watcherActive = false;
+  let watcherCompatibilityAvailable = true;
+  let chromeReloadCompatibilityAvailable = true;
+  let contentReloadCompatibilityAvailable = true;
   let hotkeyRegistered = false;
   let hotkeyListener = null;
   let lastWatchRootError = null;
@@ -73,6 +79,86 @@
     if (getPref("bool", PREF_DEBUG, false)) {
       console.debug("[UserChrome Hot-Reload]", ...args);
     }
+  }
+
+  function checkCompatibility() {
+    const missingWatcher = [];
+    const missingChromeReload = [];
+    const missingContentReload = [];
+    const servicesAvailable = typeof Services !== "undefined";
+    const ioUtilsAvailable = typeof IOUtils !== "undefined";
+    const pathUtilsAvailable = typeof PathUtils !== "undefined";
+    const chromeUtilsAvailable = typeof ChromeUtils !== "undefined";
+
+    if (!ioUtilsAvailable || typeof IOUtils.stat !== "function") {
+      missingWatcher.push("IOUtils.stat");
+    }
+    if (!ioUtilsAvailable || typeof IOUtils.getChildren !== "function") {
+      missingWatcher.push("IOUtils.getChildren");
+    }
+    if (!pathUtilsAvailable || typeof PathUtils.join !== "function" || typeof PathUtils.filename !== "function") {
+      missingWatcher.push("PathUtils.join/filename");
+    }
+    if (!servicesAvailable || typeof Services.prefs?.addObserver !== "function") {
+      missingWatcher.push("Services.prefs.addObserver");
+    }
+    if (!servicesAvailable || typeof Services.wm?.getMostRecentWindow !== "function") {
+      missingWatcher.push("Services.wm.getMostRecentWindow");
+    }
+
+    if (!pathUtilsAvailable || typeof PathUtils.toFileURI !== "function") {
+      missingChromeReload.push("PathUtils.toFileURI");
+      missingContentReload.push("PathUtils.toFileURI");
+    }
+    if (!servicesAvailable || typeof Services.io?.newURI !== "function") {
+      missingChromeReload.push("Services.io.newURI");
+      missingContentReload.push("Services.io.newURI");
+    }
+    if (!servicesAvailable || typeof Services.obs?.notifyObservers !== "function") {
+      missingChromeReload.push("Services.obs.notifyObservers");
+    }
+    if (!chromeUtilsAvailable || typeof ChromeUtils.registerWindowActor !== "function") {
+      missingContentReload.push("ChromeUtils.registerWindowActor");
+    }
+
+    const appInfo = servicesAvailable ? Services.appinfo : null;
+    const runtime = {
+      name: appInfo?.name ?? "unknown browser",
+      version: appInfo?.version ?? "unknown version",
+    };
+    if (missingWatcher.length) {
+      console.error(
+        "[UserChrome Hot-Reload] Automatic watching is unavailable in",
+        runtime,
+        "Missing APIs:",
+        missingWatcher.join(", ")
+      );
+    }
+    if (missingChromeReload.length) {
+      console.error(
+        "[UserChrome Hot-Reload] userChrome.css reload is unavailable in",
+        runtime,
+        "Missing APIs:",
+        missingChromeReload.join(", ")
+      );
+    }
+    if (missingContentReload.length) {
+      console.warn(
+        "[UserChrome Hot-Reload] userContent.css reload is unavailable in",
+        runtime,
+        "Missing APIs:",
+        [...new Set(missingContentReload)].join(", ")
+      );
+    }
+
+    const result = {
+      watcherAvailable: missingWatcher.length === 0,
+      chromeReloadAvailable: missingChromeReload.length === 0,
+      contentReloadAvailable: missingContentReload.length === 0,
+      runtime,
+    };
+    debugLog("Compatibility check", result);
+    return result;
   }
 
   function getWatchRoot() {
@@ -426,6 +512,9 @@
   }
 
   function reloadChromeSheets() {
+    if (!chromeReloadCompatibilityAvailable) {
+      return "unavailable";
+    }
     let uri;
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(chromeEntryPath));
@@ -496,6 +585,9 @@
   }
 
   async function reloadContentSheets() {
+    if (!contentReloadCompatibilityAvailable) {
+      return "unavailable";
+    }
     let uri;
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(contentEntryPath)).spec;
@@ -672,12 +764,12 @@
         debugLog("Reload requested without pending CSS file changes");
       }
       const chromeOk = getPref("bool", PREF_RELOAD_CHROME, true)
-        ? reloadChromeSheets()
+        ? (chromeReloadCompatibilityAvailable ? reloadChromeSheets() : "unavailable")
         : "disabled";
       let contentOk = "disabled";
       if (getPref("bool", PREF_RELOAD_CONTENT, true)) {
         try {
-          contentOk = await reloadContentSheets();
+          contentOk = contentReloadCompatibilityAvailable ? await reloadContentSheets() : "unavailable";
         } catch (e) {
           console.error("[UserChrome Hot-Reload] userContent.css reload request failed:", contentEntryPath, e);
           contentOk = false;
@@ -693,6 +785,8 @@
         failedAreas.push("userChrome.css");
       } else if (chromeOk === "disabled") {
         skippedAreas.push("userChrome.css disabled");
+      } else if (chromeOk === "unavailable") {
+        skippedAreas.push("userChrome.css reload API unavailable");
       }
       if (contentOk === true) {
         completedAreas.push("userContent.css");
@@ -700,6 +794,8 @@
         failedAreas.push("userContent.css");
       } else if (contentOk === "disabled") {
         skippedAreas.push("userContent.css disabled");
+      } else if (contentOk === "unavailable") {
+        skippedAreas.push("userContent.css actor API unavailable");
       } else if (contentOk === null) {
         skippedAreas.push("no content documents to refresh");
       }
@@ -800,6 +896,9 @@
   }
 
   function registerContentActor() {
+    if (!contentReloadCompatibilityAvailable) {
+      return;
+    }
     try {
       ChromeUtils.registerWindowActor(ACTOR_NAME, {
         child: {
@@ -813,9 +912,12 @@
       });
     } catch (e) {
       const message = String(e);
-      if (!/already registered|already exists|duplicate/i.test(message)) {
-        console.error("[UserChrome Hot-Reload] Failed to register content actor:", e);
+      if (/already registered|already exists|duplicate/i.test(message)) {
+        contentReloadCompatibilityAvailable = true;
+        return;
       }
+      contentReloadCompatibilityAvailable = false;
+      console.error("[UserChrome Hot-Reload] Failed to register content actor; userContent.css reload is disabled:", e);
     }
   }
 
@@ -893,7 +995,7 @@
   }
 
   function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false, previousChangedFiles = null) {
-    if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false) || watcherActive || pollTimer !== null) {
+    if (!watcherCompatibilityAvailable || !getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false) || watcherActive || pollTimer !== null) {
       return;
     }
 
@@ -955,14 +1057,16 @@
     }
     removeReloadMenuItem();
     window.__userChromeHotReloadInitialized = false;
-    Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
-    Services.prefs.removeObserver(PREF_PAUSED, pausePrefObserver);
-    Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
-    Services.prefs.removeObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
-    Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
-    Services.prefs.removeObserver(PREF_PATH, watchConfigPrefObserver);
-    Services.prefs.removeObserver(PREF_NESTED, watchConfigPrefObserver);
-    Services.prefs.removeObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    if (typeof Services !== "undefined" && typeof Services.prefs?.removeObserver === "function") {
+      Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
+      Services.prefs.removeObserver(PREF_PAUSED, pausePrefObserver);
+      Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+      Services.prefs.removeObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
+      Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
+      Services.prefs.removeObserver(PREF_PATH, watchConfigPrefObserver);
+      Services.prefs.removeObserver(PREF_NESTED, watchConfigPrefObserver);
+      Services.prefs.removeObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    }
     if (hotkeyListener) {
       window.removeEventListener("keydown", hotkeyListener, true);
       hotkeyListener = null;
@@ -1141,14 +1245,24 @@
   };
 
   function init() {
-    Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
-    Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
-    Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
-    Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
-    Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
-    Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
-    Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
-    Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    const compatibility = checkCompatibility();
+    watcherCompatibilityAvailable = compatibility.watcherAvailable;
+    chromeReloadCompatibilityAvailable = compatibility.chromeReloadAvailable;
+    contentReloadCompatibilityAvailable = compatibility.contentReloadAvailable;
+
+    const prefsAvailable = typeof Services !== "undefined" && typeof Services.prefs?.addObserver === "function";
+    if (prefsAvailable) {
+      Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
+      Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
+      Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+      Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
+      Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
+      Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
+      Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
+      Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    } else {
+      console.error("[UserChrome Hot-Reload] Preference observers unavailable; settings changes will not be applied until restart.");
+    }
     setupReloadMenuItem();
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
