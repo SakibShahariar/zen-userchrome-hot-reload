@@ -76,6 +76,7 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile; changes apply immediately. |
 | `extensions.zen-userchrome-hot-reload.reload-chrome` | `true` | Reload `userChrome.css`; disable for content-only workflows. |
 | `extensions.zen-userchrome-hot-reload.reload-content` | `true` | Reload `userContent.css`; disable for chrome-only workflows. |
+| `extensions.zen-userchrome-hot-reload.debug-logging` | `false` | Opt-in local scan, changed-file, reload, actor, and watcher-handoff diagnostics. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch; leave empty to use the profile chrome directory. Invalid or unreadable paths are reported in the Browser Console rather than silently replaced. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
 | `extensions.zen-userchrome-hot-reload.reload-debounce-ms` | `300` | Delay after the latest detected change before reloading; clamped to 50–2000 ms and applied immediately to a pending reload. |
@@ -124,6 +125,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
 - [ ] Disable `userContent.css` reload and confirm no content actors are contacted; disable `userChrome.css` reload and confirm chrome sheets are not touched; restore both defaults.
+- [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
 - [ ] Verify `META`, `CMD`, and `SUPER` modifier spellings trigger the same platform Meta key behavior.
 - [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
 - [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
@@ -135,6 +137,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 
 - **Sine integration unavailable:** CSS watching and stylesheet reloads continue, but Sine-managed mods are not rebuilt. Install or enable Sine, keep `sine.allow-unsafe-js` enabled, then restart Zen or toggle the mod off and on.
 - **Sine settings are missing:** confirm `preferences.json` exists in the mod root and reload the mod in Sine. Without that schema, built-in defaults still work but the Sine settings controls are unavailable.
+- **Debug log privacy:** diagnostics stay in the local Browser Console and can include absolute file paths. Redact personal directory names before sharing logs; the mod sends no telemetry.
 - **Custom watch path unavailable:** the Browser Console identifies the configured path and the underlying error. Clear the `watch-path` preference to return to the profile chrome directory.
 - **Invalid stylesheet path or partial content reload:** check the Browser Console for the affected `userChrome.css` / `userContent.css` path and per-frame failure details. Other eligible documents continue to be processed.
 - **No eligible content documents:** content refresh is skipped rather than treated as a failure; documents opened later use the current stylesheet.
