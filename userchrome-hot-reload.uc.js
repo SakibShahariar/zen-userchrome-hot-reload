@@ -81,7 +81,11 @@
   }
 
   function getReloadDebounce() {
-    const configured = Number(getPref("string", PREF_DEBOUNCE, "300"));
+    const raw = getPref("string", PREF_DEBOUNCE, "300");
+    if (raw === "") {
+      return 300;
+    }
+    const configured = Number(raw);
     if (!Number.isInteger(configured)) {
       return 300;
     }
