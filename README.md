@@ -71,7 +71,7 @@ in Sine settings when you don't want it watching.
 
 ## Manual reload
 
-Open Zen's application menu and choose **Reload userChrome.css & userContent.css now**. The action uses the same coalescing, reload-scope preferences, and status reporting as the configured hotkey. If the application menu is unavailable in a particular Zen build, the hotkey remains available.
+Open Zen's application menu and choose **Reload stylesheets now**. The menu label shows whether watching is active, handed off, paused, disabled, or unavailable. Hover the item to see the effective watch path, poll interval, and last reload time/result. The action uses the same coalescing and reload-scope preferences as the configured hotkey. If the application menu is unavailable in a particular Zen build, the hotkey remains available.
 
 ## Preferences
 
@@ -131,6 +131,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Trigger a manual reload from the Zen application menu; confirm it respects the independent stylesheet toggles and does not create a second poller.
+- [ ] Check the app-menu status label and tooltip in active, handed-off, paused, disabled, and unavailable states; confirm path, poll interval, and last reload time/result update after configuration changes and reloads.
 - [ ] Pause watching, confirm polling and hotkey/menu reloads stop, then resume; verify the prior scan state returns and only one poller runs across open windows.
 - [ ] While paused, close the watcher-owner window and open another; confirm paused state transfers and resume starts only one watcher.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
