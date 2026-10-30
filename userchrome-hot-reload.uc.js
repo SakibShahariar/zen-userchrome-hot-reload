@@ -433,7 +433,9 @@
       return false;
     }
 
-    let loaded = false;
+    let loaded = 0;
+    let failed = 0;
+    let cacheFlushOk = true;
     for (const win of chromeWindows()) {
       try {
         const utils = win.windowUtils;
@@ -444,21 +446,28 @@
           utils.removeSheet(uri, utils.USER_SHEET);
         } catch (e) {}
         utils.loadSheet(uri, utils.USER_SHEET);
-        loaded = true;
+        loaded += 1;
       } catch (e) {
+        failed += 1;
         // A window may be closing; continue reloading the remaining windows.
-        console.warn("[UserChrome Hot-Reload] Failed to reload userChrome.css:", chromeEntryPath, e);
+        console.error("[UserChrome Hot-Reload] Failed to reload userChrome.css:", chromeEntryPath, e);
       }
     }
 
     try {
       Services.obs.notifyObservers(null, "chrome-flush-caches", null);
     } catch (e) {
+      cacheFlushOk = false;
       // Sheet reloads have already been attempted; a cache-flush failure
       // must not prevent the content stylesheet reload from running.
-      console.warn("[UserChrome Hot-Reload] Failed to flush chrome caches:", e);
+      console.error("[UserChrome Hot-Reload] Failed to flush chrome caches:", e);
     }
-    return loaded;
+    if (failed > 0) {
+      console.error(
+        `[UserChrome Hot-Reload] userChrome.css failed in ${failed} browser window(s); ${loaded} succeeded.`
+      );
+    }
+    return loaded > 0 && failed === 0 && cacheFlushOk;
   }
 
   function collectBrowsingContexts(context, out = []) {
