@@ -385,3 +385,35 @@ test("CSS imported by userChrome.css reloads only the chrome stylesheet", async 
   assert.equal(harness.sheetLoads(), 1,
     "a CSS dependency of userChrome.css should reload the browser chrome stylesheet");
 });
+
+
+test("unresolved imports retain the conservative full-reload fallback", async () => {
+  const harness = createHarness();
+  harness.setCssText("/profile/chrome/userChrome.css", '@import "not-tracked.css";');
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+
+  harness.setCssFiles(["/profile/chrome/unused.css"]);
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+
+  assert.equal(harness.sheetLoads(), 1,
+    "an incomplete import graph must not suppress the chrome stylesheet reload");
+});
+
+test("userContent-only dependencies do not reload browser chrome", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+
+  harness.modifyCssFile("/profile/chrome/content.css", ".content { color: purple; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+
+  assert.equal(harness.sheetLoads(), 0,
+    "a userContent.css-only dependency should not reload userChrome.css");
+});
