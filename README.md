@@ -75,11 +75,12 @@ Open Zen's application menu and choose **Reload userChrome.css & userContent.css
 
 ## Preferences
 
-The Sine settings UI is generated from `preferences.json`; changes are stored in the profile's preferences. An empty custom watch path resolves to the current profile's `chrome` directory. Enable local debug logging to see the resolved path and scan counts. Numeric bounds and invalid-input fallbacks are enforced by the script.
+The Sine settings UI is generated from `preferences.json`; changes are stored in the profile's preferences. The pause setting is independent of the main enable switch. An empty custom watch path resolves to the current profile's `chrome` directory. Enable local debug logging to see the resolved path and scan counts. Numeric bounds and invalid-input fallbacks are enforced by the script.
 
 | Preference | Default | Description |
 | --- | --- | --- |
 | `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile; changes apply immediately. |
+| `extensions.zen-userchrome-hot-reload.paused` | `false` | Temporarily suspend polling and manual reload actions without disabling the mod. |
 | `extensions.zen-userchrome-hot-reload.reload-chrome` | `true` | Reload `userChrome.css`; disable for content-only workflows. |
 | `extensions.zen-userchrome-hot-reload.reload-content` | `true` | Reload `userContent.css`; disable for chrome-only workflows. |
 | `extensions.zen-userchrome-hot-reload.debug-logging` | `false` | Opt-in local scan, changed-file, reload, actor, and watcher-handoff diagnostics. |
@@ -130,6 +131,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Trigger a manual reload from the Zen application menu; confirm it respects the independent stylesheet toggles and does not create a second poller.
+- [ ] Pause watching, confirm polling and hotkey/menu reloads stop, then resume; verify the prior scan state returns and only one poller runs across open windows.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
 - [ ] Disable `userContent.css` reload and confirm no content actors are contacted; disable `userChrome.css` reload and confirm chrome sheets are not touched; restore both defaults.
 - [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
