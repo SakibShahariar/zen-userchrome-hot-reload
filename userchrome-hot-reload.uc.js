@@ -264,13 +264,15 @@
       return;
     }
 
+    let changed = false;
     for (const cachedPath of lastModifiedTimes.keys()) {
       if (!files.has(cachedPath)) {
         lastModifiedTimes.delete(cachedPath);
+        if (initialScanComplete) {
+          changed = true;
+        }
       }
     }
-
-    let changed = false;
     for (const [path, current] of files) {
       const previous = lastModifiedTimes.get(path);
       if (previous === undefined) {
