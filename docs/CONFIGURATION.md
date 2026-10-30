@@ -42,6 +42,7 @@ Adjust paths to match your profile and template locations.
 ## Behavior and troubleshooting
 
 - The watcher checks for file changes on the configured interval and waits for the debounce period before reloading.
+- When Sine's `sine-mods/mods.json` is readable, only enabled mods' declared chrome/content stylesheets and that metadata file trigger a Sine stylesheet rebuild. Ordinary profile CSS edits do not rebuild Sine; the rebuild refreshes styles without reloading mod JavaScript. If Sine metadata cannot be read, the watcher keeps the conservative full-rebuild fallback. Manual reload still refreshes all enabled scopes.
 - By default it watches top-level CSS files and `mods/*.css`. Nested scans honor exclusions and stop at a depth limit to avoid unbounded symlink traversal.
 - Content refresh targets eligible documents already open when a change occurs. New documents use the current stylesheet on navigation/open.
 - Automatic watching and stylesheet reloads depend on privileged Zen/Gecko APIs. Missing APIs are reported in the Browser Console; available manual paths may still work.
