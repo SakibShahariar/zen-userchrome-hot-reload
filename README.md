@@ -71,7 +71,7 @@ in Sine settings when you don't want it watching.
 
 ## Manual reload
 
-Open Zen's application menu and choose **Reload stylesheets now**. The menu label shows whether watching is active, handed off, paused, disabled, or unavailable. Hover the item to see the effective watch path, poll interval, and last reload time/result. The action uses the same coalescing and reload-scope preferences as the configured hotkey. If the application menu is unavailable in a particular Zen build, the hotkey remains available.
+Open Zen's application menu and choose **Reload stylesheets now**. The menu label shows whether watching is active, handed off, paused, disabled, or unavailable. Hover the item to see the effective watch path, poll interval, enabled chrome/content/Sine reload scopes, debounce, and last reload time/result. The action uses the same coalescing and reload-scope preferences as the configured hotkey. If the application menu is unavailable in a particular Zen build, the hotkey remains available.
 
 ## Preferences
 
