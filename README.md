@@ -27,11 +27,30 @@ but for the browser UI. Its primary use case is live theming:
    then `loadSheet(uri, USER_SHEET)` on the profile `userChrome.css`, followed by
    `Services.obs.notifyObservers(null, "chrome-flush-caches")`. Re-evaluating the entrypoint
    re-resolves its `@import`s, so freshly generated colors apply immediately.
-3. **Content reload** — a `JSWindowActor` (`UserChromeHotReload`) refreshes the profile
-   `userContent.css` in every open content document and iframe across all processes
-   (Fission-safe), same pattern Sine uses for its own content injection.
+3. **Content reload** — a `JSWindowActor` (`UserChromeHotReload`) requests a refresh of the profile
+   `userContent.css` in eligible open content documents and frames across browser processes.
+   The actor is registered for all frames in content contexts, not browser-chrome UI contexts.
 4. **Sine engine (optional, default on)** — also calls `window.manager.rebuildMods(true, true)`
    so Sine-managed themes refresh in sync.
+
+## Content reload coverage
+
+The reload code walks the browsing contexts of open tabs in each browser window and sends an
+update request to each available `UserChromeHotReload` actor. The actor is configured with
+`allFrames: true` and `matchesTarget: ["content"]`, so cross-origin frames are eligible too;
+there is no same-origin filter in this mod. This does not mean every browser surface is reloadable:
+`includeChrome: false` deliberately excludes browser-chrome UI, and privileged or restricted
+contexts may not expose an eligible content actor.
+
+A frame that is navigating or closing, or has no current window global, is skipped. Actor lookup
+problems are warned in the Browser Console. Rejected actor requests and unsuccessful actor replies
+are counted and reported as a failed-document total; successful replies from other documents are
+not discarded. If no eligible content documents exist, content refresh is reported as skipped
+rather than as a reload failure. If tab enumeration itself fails, the result remains an error because
+coverage cannot be established.
+
+Use the Browser Console to investigate partial content reloads. The toast summarizes the overall
+reload outcome; it does not enumerate individual URLs or expose page contents.
 
 ## Install
 
@@ -92,6 +111,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 
 - [ ] Edit a profile chrome CSS file and confirm `userChrome.css` updates without restarting Zen.
 - [ ] Edit `userContent.css` and confirm existing tabs update; verify an iframe when available.
+- [ ] Verify a cross-origin content iframe is refreshed when eligible; confirm privileged browser UI is excluded and unavailable frames do not prevent other documents from updating.
 - [ ] Regenerate or touch an imported `zen-userChrome.css` file and confirm the change triggers a reload.
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
