@@ -713,36 +713,11 @@
     if (!getPref("bool", PREF_TOAST, true)) {
       return;
     }
-    try {
-      const win = Services.wm.getMostRecentWindow("navigator:browser");
-      const manager = win?.gZenUIManager;
-      if (!manager?.showToast) {
-        console.warn("[UserChrome Hot-Reload] Zen toast API unavailable; reload status is in the Browser Console.");
-        return;
-      }
 
-      // Zen's toast API accepts Fluent IDs, not literal strings. Reuse its
-      // styled toast element, then replace the label with this mod's message.
-      const messageId = "zen-panel-ui-boosts-exported-message";
-      const toastPromise = manager.showToast(messageId);
-      const container = win.document.getElementById("zen-toast-container");
-      const toast = Array.from(container?.children ?? []).find(
-        (child) => child._messageId === messageId
-      );
-      const label = toast?.querySelector("label");
-      if (label) {
-        label.removeAttribute("data-l10n-id");
-        label.removeAttribute("data-l10n-args");
-        label.setAttribute("value", message);
-      } else {
-        console.warn("[UserChrome Hot-Reload] Zen toast label unavailable; reload status:", message);
-      }
-      toastPromise?.catch((e) => {
-        console.warn("[UserChrome Hot-Reload] Failed to show toast:", e);
-      });
-    } catch (e) {
-      console.warn("[UserChrome Hot-Reload] Failed to show toast:", e);
-    }
+    // Zen's current toast interface requires an internal Fluent message ID.
+    // Mutating another mod's toast after creation is fragile and can race its
+    // localization lifecycle, so report status through our own console channel.
+    console.info("[UserChrome Hot-Reload] " + message);
   }
 
   async function reloadNow() {
