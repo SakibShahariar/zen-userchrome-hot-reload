@@ -26,6 +26,7 @@ function createHarness() {
   ];
   let children = [...entryFiles];
   const extraRoots = new Map();
+  const directoryReadCounts = new Map();
   let cssModified = 1;
   const cssFileStats = new Map(entryFiles.map((path) => [path, { lastModified: 1, size: 10 }]));
   const cssTexts = new Map([
@@ -81,6 +82,7 @@ function createHarness() {
       return structuredClone(sineModsData);
     },
     async getChildren(path) {
+      directoryReadCounts.set(path, (directoryReadCounts.get(path) ?? 0) + 1);
       return [...(path === "/profile/chrome" ? children : extraRoots.get(path) ?? [])];
     },
   };
@@ -213,6 +215,7 @@ function createHarness() {
     },
     setExtraRoot(root, paths) {
       extraRoots.set(root, [...paths]);
+      if (root.startsWith("/profile/chrome/") && !children.includes(root)) children.push(root);
       for (const path of paths) {
         cssModified += 1;
         cssFileStats.set(path, { lastModified: cssModified, size: 10 });
@@ -229,6 +232,7 @@ function createHarness() {
       cssFileStats.set(path, { lastModified: cssModified, size: content.length });
     },
     sheetLoads: () => sheetLoads,
+    directoryReads: (path) => directoryReadCounts.get(path) ?? 0,
     modifySineStyle() {
       sineStyleModified += 1;
     },
@@ -472,4 +476,40 @@ test("Sine tracking works when profile chrome is not the first configured root",
   await harness.flushAsyncWork();
   await harness.runDebouncedReload();
   assert.deepEqual(harness.rebuildCalls, [[false, true]], "Sine stylesheet tracking must remain enabled");
+});
+
+
+test("parent and child watch roots scan their overlapping directory only once", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", '["/profile/chrome", "/profile/chrome/mods"]');
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  harness.setExtraRoot("/profile/chrome/mods", ["/profile/chrome/mods/theme.css"]);
+  harness.setCssText("/profile/chrome/userChrome.css", '@import "mods/theme.css";');
+  await harness.flushAsyncWork();
+  assert.equal(harness.directoryReads("/profile/chrome/mods"), 1,
+    "the child root should be scanned as part of the parent and not scanned a second time");
+
+  harness.modifyCssFile("/profile/chrome/mods/theme.css", ".theme { color: teal; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.equal(harness.sheetLoads(), 1, "the overlapping CSS path should trigger exactly one reload");
+  assert.equal(harness.directoryReads("/profile/chrome/mods"), 1,
+    "the cached overlapping directory should not be rescanned for the second root");
+});
+
+test("a legacy single custom watch path remains supported", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", "/external/styles");
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  harness.setExtraRoot("/external/styles", ["/external/styles/generated.css"]);
+  harness.setCssText("/profile/chrome/userChrome.css", '@import "file:///external/styles/generated.css";');
+  await harness.flushAsyncWork();
+  harness.modifyCssFile("/external/styles/generated.css", ".generated { color: navy; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.equal(harness.sheetLoads(), 1, "the original single-path setting should continue to work");
 });
