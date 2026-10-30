@@ -1058,13 +1058,21 @@
         return;
       }
 
-      let inheritedState = null;
+      let inheritedState = window.__userChromeHotReloadPausedState || null;
+      delete window.__userChromeHotReloadPausedState;
       for (const otherWindow of chromeWindows()) {
-        if (
-          otherWindow === window ||
-          otherWindow.closed ||
-          typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function"
-        ) {
+        if (otherWindow === window || otherWindow.closed) {
+          continue;
+        }
+        const pausedState = otherWindow.__userChromeHotReloadPausedState;
+        if (pausedState) {
+          if (!inheritedState) {
+            inheritedState = pausedState;
+          }
+          delete otherWindow.__userChromeHotReloadPausedState;
+          continue;
+        }
+        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
           continue;
         }
         const state = otherWindow.__userChromeHotReloadYieldWatcher();
@@ -1150,13 +1158,21 @@
     // If a newly opened window becomes most recent, transfer watcher state
     // from any existing owner before starting its own poller.
     if (window === mostRecentWindow && !getPref("bool", PREF_PAUSED, false)) {
-      let inheritedState = null;
+      let inheritedState = window.__userChromeHotReloadPausedState || null;
+      delete window.__userChromeHotReloadPausedState;
       for (const otherWindow of chromeWindows()) {
-        if (
-          otherWindow === window ||
-          otherWindow.closed ||
-          typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function"
-        ) {
+        if (otherWindow === window || otherWindow.closed) {
+          continue;
+        }
+        const pausedState = otherWindow.__userChromeHotReloadPausedState;
+        if (pausedState) {
+          if (!inheritedState) {
+            inheritedState = pausedState;
+          }
+          delete otherWindow.__userChromeHotReloadPausedState;
+          continue;
+        }
+        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
           continue;
         }
         const state = otherWindow.__userChromeHotReloadYieldWatcher();
