@@ -315,7 +315,7 @@
             const segments = relativePath.split("/");
             if (
               relativePath.startsWith("/") ||
-              relativePath.includes("\\\\") ||
+              relativePath.includes("\\") ||
               segments.some((segment) => !segment || segment === "." || segment === "..")
             ) {
               debugLog("Ignoring unsafe Sine stylesheet path", { id, relativePath });
@@ -796,7 +796,7 @@
         );
         return "unavailable";
       }
-      const result = await manager.rebuildMods(true, true);
+      const result = await manager.rebuildMods(false, true);
       return result !== false;
     } catch (e) {
       console.error("[UserChrome Hot-Reload] Failed to rebuild Sine-managed mods:", e);
