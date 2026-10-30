@@ -88,8 +88,8 @@
   {
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.toast",
-    "label": "Show a toast on each reload",
-    "description": "Show a concise Zen toast after reloads. Detailed diagnostics remain in the Browser Console.",
+    "label": "Log reload status in Browser Console",
+    "description": "Report a concise status message after each reload in the Browser Console. Disable to suppress these status messages.",
     "defaultValue": true
   },
   {
