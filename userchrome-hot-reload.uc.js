@@ -14,6 +14,7 @@
   const PREF_RELOAD_CHROME = "extensions.zen-userchrome-hot-reload.reload-chrome";
   const PREF_RELOAD_CONTENT = "extensions.zen-userchrome-hot-reload.reload-content";
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
+  const PREF_DEBUG = "extensions.zen-userchrome-hot-reload.debug-logging";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
   const PREF_EXCLUDED_DIRS = "extensions.zen-userchrome-hot-reload.excluded-dirs";
@@ -30,6 +31,7 @@
   let lastModifiedTimes = new Map();
   let directoryCache = new Map();
   let pendingReload = null;
+  let pendingChangedFiles = new Map();
   let reloadInProgress = false;
   let reloadRequested = false;
   let tickInProgress = false;
@@ -58,6 +60,12 @@
       }
     } catch (e) {}
     return fallback;
+  }
+
+  function debugLog(...args) {
+    if (getPref("bool", PREF_DEBUG, false)) {
+      console.debug("[UserChrome Hot-Reload]", ...args);
+    }
   }
 
   function getWatchRoot() {
@@ -302,17 +310,23 @@
     tickInProgress = true;
     const generation = watcherGeneration;
     try {
-    const files = await collectCssFiles(getWatchRoot());
+    const watchRoot = getWatchRoot();
+    const files = await collectCssFiles(watchRoot);
     if (!watcherActive || generation !== watcherGeneration) {
       return;
     }
 
+    const changedFiles = getPref("bool", PREF_DEBUG, false) ? [] : null;
     let changed = false;
     for (const cachedPath of lastModifiedTimes.keys()) {
       if (!files.has(cachedPath)) {
         lastModifiedTimes.delete(cachedPath);
         if (initialScanComplete) {
           changed = true;
+          if (changedFiles) {
+            changedFiles.push({ action: "removed", path: cachedPath });
+            pendingChangedFiles.set(cachedPath, "removed");
+          }
         }
       }
     }
@@ -322,6 +336,10 @@
         lastModifiedTimes.set(path, current);
         if (initialScanComplete) {
           changed = true;
+          if (changedFiles) {
+            changedFiles.push({ action: "added", path });
+            pendingChangedFiles.set(path, "added");
+          }
         }
       } else if (
         typeof previous !== "object" ||
@@ -330,7 +348,20 @@
       ) {
         lastModifiedTimes.set(path, current);
         changed = true;
+        if (changedFiles) {
+          changedFiles.push({ action: "modified", path });
+          pendingChangedFiles.set(path, "modified");
+        }
       }
+    }
+
+    debugLog("Scan completed", {
+      watchRoot,
+      cssFileCount: files.size,
+      changedFileCount: changedFiles?.length ?? 0,
+    });
+    if (changedFiles?.length) {
+      debugLog("CSS file changes detected", changedFiles);
     }
 
     initialScanComplete = true;
@@ -482,6 +513,7 @@
       return null;
     }
 
+    debugLog("Dispatching userContent.css refresh", { documentCount: requests.length });
     const results = await Promise.allSettled(requests);
     const failed = results.filter(
       (result) => result.status !== "fulfilled" || result.value?.ok !== true
@@ -573,7 +605,18 @@
     reloadInProgress = true;
 
     try {
-      console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
+      const changedFiles = Array.from(pendingChangedFiles, ([path, action]) => ({ action, path }));
+      pendingChangedFiles.clear();
+      if (changedFiles.length) {
+        const visibleFiles = changedFiles.slice(0, 20);
+        debugLog("Reload triggered by CSS file changes", {
+          total: changedFiles.length,
+          files: visibleFiles,
+          omitted: changedFiles.length - visibleFiles.length,
+        });
+      } else {
+        debugLog("Reload requested without pending CSS file changes");
+      }
       const chromeOk = getPref("bool", PREF_RELOAD_CHROME, true)
         ? reloadChromeSheets()
         : "disabled";
@@ -614,6 +657,7 @@
         skippedAreas.push("Sine integration unavailable");
       }
 
+      debugLog("Reload outcome", { chromeOk, contentOk, sineOk, failedAreas, completedAreas, skippedAreas });
       if (failedAreas.length) {
         console.error(
           "[UserChrome Hot-Reload] Reload failed for:",
@@ -748,7 +792,7 @@
       reloadNow();
     }
 
-    console.log("[UserChrome Hot-Reload] Watcher initialized. Watching:", getWatchRoot());
+    debugLog("Watcher started", { watchRoot: getWatchRoot(), pollIntervalMs: getPollInterval() });
   }
 
   function yieldWatcher() {
@@ -766,6 +810,7 @@
       pendingReload = null;
     }
 
+    debugLog("Watcher yielded", { wasWatcher, forceReloadOnHandoff });
     return wasWatcher
       ? { lastModifiedTimes, initialScanComplete, forceReloadOnHandoff }
       : null;
@@ -811,11 +856,14 @@
         typeof win.__userChromeHotReloadStartWatcher === "function"
     );
     if (nextWindow) {
+      debugLog("Watcher ownership transferred to another browser window");
       nextWindow.__userChromeHotReloadStartWatcher(
         lastModifiedTimes,
         initialScanComplete,
         forceReloadOnHandoff
       );
+    } else {
+      debugLog("No other browser window available for watcher handoff");
     }
   }
 
