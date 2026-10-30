@@ -14,7 +14,7 @@ but for the browser UI. Its primary use case is live theming:
 
 ## Contents
 
-[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Notes / limitations](#notes--limitations) · [License](#license)
+[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Troubleshooting](#troubleshooting) · [Notes / limitations](#notes--limitations) · [License](#license)
 
 ## How it works
 
@@ -127,6 +127,13 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Change the reload debounce while a reload is pending; confirm the timer is rescheduled once and invalid values fall back safely or clamp to the documented bounds.
 - [ ] With nested watching enabled, create a directory symlink back to an ancestor; confirm scanning remains bounded, normal nested CSS is still found, and a warning identifies the skipped path.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
+
+## Troubleshooting
+
+- **Sine integration unavailable:** CSS watching and stylesheet reloads continue, but Sine-managed mods are not rebuilt. Install or enable Sine, keep `sine.allow-unsafe-js` enabled, then restart Zen or toggle the mod off and on.
+- **Custom watch path unavailable:** the Browser Console identifies the configured path and the underlying error. Clear the `watch-path` preference to return to the profile chrome directory.
+- **Invalid stylesheet path or partial content reload:** check the Browser Console for the affected `userChrome.css` / `userContent.css` path and per-frame failure details. Other eligible documents continue to be processed.
+- **No eligible content documents:** content refresh is skipped rather than treated as a failure; documents opened later use the current stylesheet.
 
 ## Notes / limitations
 
