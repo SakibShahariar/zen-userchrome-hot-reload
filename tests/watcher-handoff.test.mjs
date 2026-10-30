@@ -118,7 +118,8 @@ function createHarness() {
   }
 
   async function flushAsyncWork() {
-    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
+    for (let i = 0; i < 20; i++) await Promise.resolve();
   }
 
   return {
