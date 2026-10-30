@@ -131,6 +131,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 ## Troubleshooting
 
 - **Sine integration unavailable:** CSS watching and stylesheet reloads continue, but Sine-managed mods are not rebuilt. Install or enable Sine, keep `sine.allow-unsafe-js` enabled, then restart Zen or toggle the mod off and on.
+- **Sine settings are missing:** confirm `preferences.json` exists in the mod root and reload the mod in Sine. Without that schema, built-in defaults still work but the Sine settings controls are unavailable.
 - **Custom watch path unavailable:** the Browser Console identifies the configured path and the underlying error. Clear the `watch-path` preference to return to the profile chrome directory.
 - **Invalid stylesheet path or partial content reload:** check the Browser Console for the affected `userChrome.css` / `userContent.css` path and per-frame failure details. Other eligible documents continue to be processed.
 - **No eligible content documents:** content refresh is skipped rather than treated as a failure; documents opened later use the current stylesheet.
