@@ -39,6 +39,8 @@
   let pendingReload = null;
   let pendingChangedFiles = new Map();
   let reloadMenuItem = null;
+  let lastReloadAt = null;
+  let lastReloadStatus = "Never";
   let reloadMenuSeparator = null;
   let reloadMenuCommandHandler = null;
   let reloadInProgress = false;
@@ -756,6 +758,7 @@
       return;
     }
     reloadInProgress = true;
+    setReloadStatus("Running");
 
     try {
       const changedFiles = Array.from(pendingChangedFiles, ([path, action]) => ({ action, path }));
@@ -814,6 +817,7 @@
         skippedAreas.push("Sine integration unavailable");
       }
 
+      setReloadStatus(failedAreas.length ? "Failed" : completedAreas.length ? "Succeeded" : "Skipped");
       debugLog("Reload outcome", { chromeOk, contentOk, sineOk, failedAreas, completedAreas, skippedAreas });
       if (failedAreas.length) {
         console.error(
@@ -855,11 +859,73 @@
     if (!reloadMenuItem) {
       return;
     }
-    if (getPref("bool", PREF_ENABLED, true) && !getPref("bool", PREF_PAUSED, false)) {
+    const enabled = getPref("bool", PREF_ENABLED, true);
+    const paused = getPref("bool", PREF_PAUSED, false);
+    const ownerWindow = chromeWindows().find(
+      (win) => !win.closed && win.__userChromeHotReloadIsWatcherOwner === true
+    );
+    const status = !enabled
+      ? "Disabled"
+      : paused
+        ? "Paused"
+        : !watcherCompatibilityAvailable
+          ? "Unavailable"
+          : ownerWindow
+            ? ownerWindow === window ? "Active" : "Handed off"
+            : "Not running";
+
+    let effectiveWatchRoot = "Unavailable";
+    try {
+      effectiveWatchRoot = getWatchRoot();
+    } catch (e) {}
+    const effectivePollInterval = getPollInterval();
+    let recentReloadAt = lastReloadAt;
+    let recentReloadStatus = lastReloadStatus;
+    for (const win of chromeWindows()) {
+      const timestamp = Number(win.__userChromeHotReloadLastReloadAt || 0);
+      if (timestamp > (recentReloadAt || 0)) {
+        recentReloadAt = timestamp;
+        recentReloadStatus = win.__userChromeHotReloadLastReloadStatus || "Unknown";
+      }
+    }
+    const reloadTime = recentReloadAt ? new Date(recentReloadAt).toLocaleString() : "Never";
+    reloadMenuItem.setAttribute("label", "Reload stylesheets now (" + status + ")");
+    reloadMenuItem.setAttribute(
+      "tooltiptext",
+      "Watcher: " + status +
+      "\nWatch path: " + effectiveWatchRoot +
+      "\nPoll interval: " + effectivePollInterval + " ms" +
+      "\nLast reload: " + reloadTime + " (" + recentReloadStatus + ")"
+    );
+    if (enabled && !paused) {
       reloadMenuItem.removeAttribute("disabled");
     } else {
       reloadMenuItem.setAttribute("disabled", "true");
     }
+  }
+
+  function notifyReloadStatusChange() {
+    for (const win of chromeWindows()) {
+      try {
+        win.__userChromeHotReloadUpdateStatus?.();
+      } catch (e) {}
+    }
+    updateReloadMenuItem();
+  }
+
+  function setReloadStatus(status) {
+    const timestamp = Date.now();
+    lastReloadAt = timestamp;
+    lastReloadStatus = status;
+    const windows = chromeWindows();
+    if (!windows.includes(window)) {
+      windows.push(window);
+    }
+    for (const win of windows) {
+      win.__userChromeHotReloadLastReloadAt = timestamp;
+      win.__userChromeHotReloadLastReloadStatus = status;
+    }
+    notifyReloadStatusChange();
   }
 
   function setupReloadMenuItem() {
@@ -869,6 +935,7 @@
       debugLog("App menu unavailable; use the configured hotkey for manual reloads");
       return;
     }
+    window.__userChromeHotReloadUpdateStatus = updateReloadMenuItem;
     if (reloadMenuItem?.isConnected) {
       updateReloadMenuItem();
       return;
@@ -880,7 +947,7 @@
     reloadMenuSeparator.id = RELOAD_MENU_SEPARATOR_ID;
     reloadMenuItem = doc.createXULElement("menuitem");
     reloadMenuItem.id = RELOAD_MENU_ITEM_ID;
-    reloadMenuItem.setAttribute("label", "Reload userChrome.css & userContent.css now");
+    reloadMenuItem.setAttribute("label", "Reload stylesheets now");
     reloadMenuItem.setAttribute("tooltiptext", "Reload the enabled stylesheets immediately");
     reloadMenuCommandHandler = () => {
       void reloadNow();
@@ -900,6 +967,9 @@
     reloadMenuItem = null;
     reloadMenuSeparator = null;
     reloadMenuCommandHandler = null;
+    if (window.__userChromeHotReloadUpdateStatus === updateReloadMenuItem) {
+      delete window.__userChromeHotReloadUpdateStatus;
+    }
   }
 
   function registerContentActor() {
@@ -1015,6 +1085,8 @@
     initialScanComplete = wasInitialized;
     watcherGeneration += 1;
     watcherActive = true;
+    window.__userChromeHotReloadIsWatcherOwner = true;
+    notifyReloadStatusChange();
 
     registerContentActor();
     pollTimer = setInterval(tick, getPollInterval());
@@ -1033,6 +1105,8 @@
 
     watcherGeneration += 1;
     watcherActive = false;
+    window.__userChromeHotReloadIsWatcherOwner = false;
+    notifyReloadStatusChange();
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -1054,6 +1128,8 @@
 
     watcherGeneration += 1;
     watcherActive = false;
+    window.__userChromeHotReloadIsWatcherOwner = false;
+    notifyReloadStatusChange();
     if (pollTimer !== null) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -1063,6 +1139,9 @@
       pendingReload = null;
     }
     removeReloadMenuItem();
+    delete window.__userChromeHotReloadIsWatcherOwner;
+    delete window.__userChromeHotReloadLastReloadAt;
+    delete window.__userChromeHotReloadLastReloadStatus;
     window.__userChromeHotReloadInitialized = false;
     if (typeof Services !== "undefined" && typeof Services.prefs?.removeObserver === "function") {
       Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
@@ -1116,6 +1195,7 @@
 
   const pollIntervalPrefObserver = {
     observe() {
+      notifyReloadStatusChange();
       // Apply interval changes immediately without creating a second poller.
       if (!watcherActive || pollTimer === null) {
         return;
@@ -1140,6 +1220,7 @@
 
   const watchConfigPrefObserver = {
     observe() {
+      notifyReloadStatusChange();
       // Re-scan immediately without creating another polling timer.
       tick();
     },
@@ -1153,7 +1234,7 @@
 
   const enabledPrefObserver = {
     observe() {
-      updateReloadMenuItem();
+      notifyReloadStatusChange();
       if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
         // Pausing or disabling removes the key listener and stops polling.
         setupHotkey();
@@ -1207,7 +1288,7 @@
 
   const pausePrefObserver = {
     observe() {
-      updateReloadMenuItem();
+      notifyReloadStatusChange();
       setupHotkey();
       const paused = getPref("bool", PREF_PAUSED, false);
       const enabled = getPref("bool", PREF_ENABLED, true);
@@ -1260,60 +1341,4 @@
     const prefsAvailable = typeof Services !== "undefined" && typeof Services.prefs?.addObserver === "function";
     if (prefsAvailable) {
       Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
-      Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
-      Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
-      Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
-      Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
-      Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
-      Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
-      Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
-    } else {
-      console.error("[UserChrome Hot-Reload] Preference observers unavailable; settings changes will not be applied until restart.");
-    }
-    setupReloadMenuItem();
-    setupHotkey();
-    window.__userChromeHotReloadStartWatcher = startWatcher;
-    window.__userChromeHotReloadYieldWatcher = yieldWatcher;
-    window.addEventListener("beforeunload", cleanupWindow, { once: true });
-
-    // If a newly opened window becomes most recent, transfer watcher state
-    // from any existing owner before starting its own poller.
-    if (window === mostRecentWindow && !getPref("bool", PREF_PAUSED, false)) {
-      let inheritedState = window.__userChromeHotReloadPausedState || null;
-      delete window.__userChromeHotReloadPausedState;
-      for (const otherWindow of chromeWindows()) {
-        if (otherWindow === window || otherWindow.closed) {
-          continue;
-        }
-        const pausedState = otherWindow.__userChromeHotReloadPausedState;
-        if (pausedState) {
-          if (!inheritedState) {
-            inheritedState = pausedState;
-          }
-          delete otherWindow.__userChromeHotReloadPausedState;
-          continue;
-        }
-        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
-          continue;
-        }
-        const state = otherWindow.__userChromeHotReloadYieldWatcher();
-        if (!inheritedState && state) {
-          inheritedState = state;
-        }
-      }
-
-      if (inheritedState) {
-        startWatcher(
-          inheritedState.lastModifiedTimes,
-          inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff,
-          inheritedState.pendingChangedFiles
-        );
-      } else {
-        startWatcher();
-      }
-    }
-  }
-
-  init();
-})();
+      Services.prefs.add
