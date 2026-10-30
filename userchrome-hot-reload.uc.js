@@ -606,7 +606,7 @@
     const needsCtrl = parts.includes("CTRL");
     const needsShift = parts.includes("SHIFT");
     const needsAlt = parts.includes("ALT");
-    const needsMeta = parts.includes("META");
+    const needsMeta = parts.some((part) => ["META", "CMD", "SUPER"].includes(part));
 
     hotkeyListener = (event) => {
         if (!getPref("bool", PREF_ENABLED, true)) {
