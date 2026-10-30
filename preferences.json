@@ -30,6 +30,13 @@
     "defaultValue": "500"
   },
   {
+    "type": "string",
+    "property": "extensions.zen-userchrome-hot-reload.reload-debounce-ms",
+    "label": "Reload Debounce (ms)",
+    "description": "Wait after the latest detected change before reloading. Values are clamped to 50–2000 ms; default is 300 ms.",
+    "defaultValue": "300"
+  },
+  {
     "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.watch-nested-directories",
     "label": "Watch nested directories",
