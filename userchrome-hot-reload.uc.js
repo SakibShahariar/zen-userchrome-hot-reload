@@ -21,6 +21,7 @@
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
   const PREF_EXCLUDED_DIRS = "extensions.zen-userchrome-hot-reload.excluded-dirs";
   const PREF_ENABLED = "extensions.zen-userchrome-hot-reload.enabled";
+  const PREF_PAUSED = "extensions.zen-userchrome-hot-reload.paused";
 
   const ACTOR_NAME = "UserChromeHotReload";
   const ACTOR_MODULE =
@@ -644,7 +645,7 @@
   }
 
   async function reloadNow() {
-    if (!getPref("bool", PREF_ENABLED, true)) {
+    if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
       return;
     }
 
@@ -751,7 +752,7 @@
     if (!reloadMenuItem) {
       return;
     }
-    if (getPref("bool", PREF_ENABLED, true)) {
+    if (getPref("bool", PREF_ENABLED, true) && !getPref("bool", PREF_PAUSED, false)) {
       reloadMenuItem.removeAttribute("disabled");
     } else {
       reloadMenuItem.setAttribute("disabled", "true");
@@ -824,7 +825,7 @@
       hotkeyListener = null;
       hotkeyRegistered = false;
     }
-    if (!getPref("bool", PREF_ENABLED, true)) {
+    if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
       return;
     }
     const combo = getPref("string", PREF_HOTKEY, "").toUpperCase();
@@ -865,7 +866,7 @@
     const needsMeta = normalizedModifiers.includes("META");
 
     hotkeyListener = (event) => {
-        if (!getPref("bool", PREF_ENABLED, true)) {
+        if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
           return;
         }
         if (event.key.toUpperCase() !== key) {
@@ -892,7 +893,7 @@
   }
 
   function startWatcher(previousTimes = null, wasInitialized = false, forceReload = false, previousChangedFiles = null) {
-    if (!getPref("bool", PREF_ENABLED, true) || watcherActive || pollTimer !== null) {
+    if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false) || watcherActive || pollTimer !== null) {
       return;
     }
 
@@ -955,6 +956,7 @@
     removeReloadMenuItem();
     window.__userChromeHotReloadInitialized = false;
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
+    Services.prefs.removeObserver(PREF_PAUSED, pausePrefObserver);
     Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
     Services.prefs.removeObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
     Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
@@ -965,6 +967,16 @@
       window.removeEventListener("keydown", hotkeyListener, true);
       hotkeyListener = null;
       hotkeyRegistered = false;
+    }
+
+    const pausedState = window.__userChromeHotReloadPausedState;
+    if (pausedState) {
+      const nextWindow = chromeWindows().find((win) => win !== window && !win.closed);
+      if (nextWindow) {
+        nextWindow.__userChromeHotReloadPausedState = pausedState;
+        debugLog("Paused watcher state transferred to another browser window");
+      }
+      delete window.__userChromeHotReloadPausedState;
     }
 
     if (!wasWatcher) {
@@ -1031,10 +1043,13 @@
   const enabledPrefObserver = {
     observe() {
       updateReloadMenuItem();
-      if (!getPref("bool", PREF_ENABLED, true)) {
-        // Remove the now-inert key listener immediately while disabled.
+      if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
+        // Pausing or disabling removes the key listener and stops polling.
         setupHotkey();
-        yieldWatcher();
+        const state = yieldWatcher();
+        if (state && getPref("bool", PREF_PAUSED, false)) {
+          window.__userChromeHotReloadPausedState = state;
+        }
         return;
       }
 
@@ -1071,8 +1086,55 @@
     },
   };
 
+  const pausePrefObserver = {
+    observe() {
+      updateReloadMenuItem();
+      setupHotkey();
+      const paused = getPref("bool", PREF_PAUSED, false);
+      const enabled = getPref("bool", PREF_ENABLED, true);
+      if (paused || !enabled) {
+        const state = yieldWatcher();
+        if (state && paused) {
+          window.__userChromeHotReloadPausedState = state;
+        }
+        return;
+      }
+      if (Services.wm.getMostRecentWindow("navigator:browser") !== window) {
+        return;
+      }
+
+      let inheritedState = window.__userChromeHotReloadPausedState || null;
+      delete window.__userChromeHotReloadPausedState;
+      for (const otherWindow of chromeWindows()) {
+        if (otherWindow === window || otherWindow.closed) {
+          continue;
+        }
+        const state = otherWindow.__userChromeHotReloadPausedState;
+        if (state) {
+          if (!inheritedState) {
+            inheritedState = state;
+          }
+          delete otherWindow.__userChromeHotReloadPausedState;
+        }
+      }
+
+      if (inheritedState) {
+        startWatcher(
+          inheritedState.lastModifiedTimes,
+          inheritedState.initialScanComplete,
+          inheritedState.forceReloadOnHandoff,
+          inheritedState.pendingChangedFiles
+        );
+      } else {
+        startWatcher();
+      }
+      debugLog("Watcher resumed", { restoredState: Boolean(inheritedState) });
+    },
+  };
+
   function init() {
     Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
+    Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
     Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
     Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
     Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
@@ -1087,7 +1149,7 @@
 
     // If a newly opened window becomes most recent, transfer watcher state
     // from any existing owner before starting its own poller.
-    if (window === mostRecentWindow) {
+    if (window === mostRecentWindow && !getPref("bool", PREF_PAUSED, false)) {
       let inheritedState = null;
       for (const otherWindow of chromeWindows()) {
         if (
