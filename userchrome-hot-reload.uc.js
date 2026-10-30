@@ -356,12 +356,14 @@
     }
 
     const requests = [];
+    let enumerationFailed = false;
     for (const win of chromeWindows()) {
       let tabs;
       try {
         tabs = win.gBrowser?.tabs;
       } catch (e) {
         // A browser window may be tearing down; continue with other windows.
+        enumerationFailed = true;
         console.warn("[UserChrome Hot-Reload] Could not enumerate browser tabs:", e);
         continue;
       }
@@ -373,6 +375,7 @@
       try {
         tabList = Array.from(tabs);
       } catch (e) {
+        enumerationFailed = true;
         console.warn("[UserChrome Hot-Reload] Could not snapshot browser tabs:", e);
         continue;
       }
@@ -407,8 +410,12 @@
     }
 
     if (requests.length === 0) {
-      console.warn("[UserChrome Hot-Reload] No content processes available to refresh.");
-      return false;
+      if (enumerationFailed) {
+        console.error("[UserChrome Hot-Reload] Could not enumerate content documents; reload status is unknown.");
+        return false;
+      }
+      console.info("[UserChrome Hot-Reload] No eligible content documents available; skipping content stylesheet refresh.");
+      return null;
     }
 
     const results = await Promise.allSettled(requests);
@@ -500,7 +507,15 @@
       }
       reloadSineMods();
 
-      if (chromeOk && contentOk) {
+      if (contentOk === null) {
+        const message = chromeOk
+          ? "UserChrome reloaded; no content documents to refresh."
+          : "UserChrome reload failed; no content documents to refresh.";
+        if (!chromeOk) {
+          console.error("[UserChrome Hot-Reload] UserChrome reload failed; no content documents were available to refresh.");
+        }
+        showToast(message);
+      } else if (chromeOk && contentOk) {
         showToast("UserChrome & Content reloaded");
       } else if (chromeOk) {
         console.error("[UserChrome Hot-Reload] UserChrome reloaded, but userContent.css failed to reload. Check the Browser Console.");
