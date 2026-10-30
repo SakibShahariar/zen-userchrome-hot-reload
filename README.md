@@ -78,7 +78,7 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.excluded-dirs` | `sine-mods,JS,utils` | Comma-separated directory names to skip while scanning. Leave empty to exclude none. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
 | `extensions.zen-userchrome-hot-reload.toast` | `true` | Show a Zen toast after each reload. |
-| `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload from any browser window. Single-key shortcuts such as `F5` are supported; bare printable keys may conflict with browser shortcuts or text entry. Empty disables. |
+| `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload from any browser window. Single-key shortcuts such as `F5` are supported; `CMD` and `SUPER` are aliases for `META`. Bare printable keys may conflict with browser shortcuts or text entry. Empty disables. |
 
 ## Matugen setup (reference)
 
@@ -117,6 +117,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
+- [ ] Verify `META`, `CMD`, and `SUPER` modifier spellings trigger the same platform Meta key behavior.
 - [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
 - [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
