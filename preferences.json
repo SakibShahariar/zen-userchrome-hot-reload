@@ -16,6 +16,20 @@
     "defaultValue": true
   },
   {
+    "type": "checkbox",
+    "property": "extensions.zen-userchrome-hot-reload.reload-chrome",
+    "label": "Reload userChrome.css",
+    "description": "Reload browser chrome styles when a tracked CSS file changes or a manual reload is triggered.",
+    "defaultValue": true
+  },
+  {
+    "type": "checkbox",
+    "property": "extensions.zen-userchrome-hot-reload.reload-content",
+    "label": "Reload userContent.css",
+    "description": "Reload styles in eligible open content documents and frames when a tracked CSS file changes or a manual reload is triggered.",
+    "defaultValue": true
+  },
+  {
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.watch-path",
     "label": "Custom Watch Path",
