@@ -11,6 +11,8 @@
   const PREF_INTERVAL = "extensions.zen-userchrome-hot-reload.poll-interval-ms";
   const PREF_DEBOUNCE = "extensions.zen-userchrome-hot-reload.reload-debounce-ms";
   const PREF_SINE = "extensions.zen-userchrome-hot-reload.reload-sine-mods";
+  const PREF_RELOAD_CHROME = "extensions.zen-userchrome-hot-reload.reload-chrome";
+  const PREF_RELOAD_CONTENT = "extensions.zen-userchrome-hot-reload.reload-content";
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
@@ -572,23 +574,44 @@
 
     try {
       console.log("[UserChrome Hot-Reload] Change detected - reloading userChrome.css & userContent.css");
-      const chromeOk = reloadChromeSheets();
-      let contentOk = false;
-      try {
-        contentOk = await reloadContentSheets();
-      } catch (e) {
-        console.error("[UserChrome Hot-Reload] Content reload request failed:", e);
+      const chromeOk = getPref("bool", PREF_RELOAD_CHROME, true)
+        ? reloadChromeSheets()
+        : "disabled";
+      let contentOk = "disabled";
+      if (getPref("bool", PREF_RELOAD_CONTENT, true)) {
+        try {
+          contentOk = await reloadContentSheets();
+        } catch (e) {
+          console.error("[UserChrome Hot-Reload] userContent.css reload request failed:", contentEntryPath, e);
+          contentOk = false;
+        }
       }
       const sineOk = await reloadSineMods();
       const failedAreas = [];
-      if (!chromeOk) {
+      const completedAreas = [];
+      const skippedAreas = [];
+      if (chromeOk === true) {
+        completedAreas.push("userChrome.css");
+      } else if (chromeOk === false) {
         failedAreas.push("userChrome.css");
+      } else if (chromeOk === "disabled") {
+        skippedAreas.push("userChrome.css disabled");
       }
-      if (contentOk === false) {
+      if (contentOk === true) {
+        completedAreas.push("userContent.css");
+      } else if (contentOk === false) {
         failedAreas.push("userContent.css");
+      } else if (contentOk === "disabled") {
+        skippedAreas.push("userContent.css disabled");
+      } else if (contentOk === null) {
+        skippedAreas.push("no content documents to refresh");
       }
-      if (sineOk === false) {
+      if (sineOk === true) {
+        completedAreas.push("Sine mods");
+      } else if (sineOk === false) {
         failedAreas.push("Sine mods");
+      } else if (sineOk === "unavailable") {
+        skippedAreas.push("Sine integration unavailable");
       }
 
       if (failedAreas.length) {
@@ -597,29 +620,26 @@
           failedAreas.join(", "),
           ". See the preceding Browser Console entries for details."
         );
-        const unavailableSuffix =
-          sineOk === "unavailable" ? " Sine integration is unavailable." : "";
+        const completedText = completedAreas.length
+          ? completedAreas.join(" & ") + " reloaded; "
+          : "";
+        const skippedText = skippedAreas.length
+          ? " (" + skippedAreas.join("; ") + ")"
+          : "";
         showToast(
-          `${failedAreas.join(" & ")} reload failed. Check Browser Console.${unavailableSuffix}`
+          completedText + failedAreas.join(" & ") +
+          " reload failed. Check Browser Console." + skippedText
         );
-      } else if (contentOk === null) {
-        const completedAreas = ["userChrome.css"];
-        if (sineOk === true) {
-          completedAreas.push("Sine mods");
-        }
-        const unavailableSuffix =
-          sineOk === "unavailable" ? "; Sine integration unavailable" : "";
-        showToast(
-          `${completedAreas.join(" & ")} reloaded; no content documents to refresh${unavailableSuffix}.`
-        );
+      } else if (completedAreas.length) {
+        const skippedText = skippedAreas.length
+          ? "; " + skippedAreas.join("; ")
+          : "";
+        showToast(completedAreas.join(" & ") + " reloaded" + skippedText + ".");
       } else {
-        const completedAreas = ["userChrome.css", "userContent.css"];
-        if (sineOk === true) {
-          completedAreas.push("Sine mods");
-        }
-        const unavailableSuffix =
-          sineOk === "unavailable" ? "; Sine integration unavailable" : "";
-        showToast(`${completedAreas.join(" & ")} reloaded${unavailableSuffix}.`);
+        const skippedText = skippedAreas.length
+          ? "; " + skippedAreas.join("; ")
+          : "";
+        showToast("No enabled reload targets" + skippedText + ".");
       }
     } finally {
       reloadInProgress = false;
