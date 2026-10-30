@@ -9,6 +9,7 @@
 
   const PREF_PATH = "extensions.zen-userchrome-hot-reload.watch-path";
   const PREF_INTERVAL = "extensions.zen-userchrome-hot-reload.poll-interval-ms";
+  const PREF_DEBOUNCE = "extensions.zen-userchrome-hot-reload.reload-debounce-ms";
   const PREF_SINE = "extensions.zen-userchrome-hot-reload.reload-sine-mods";
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
@@ -77,6 +78,14 @@
     const configured = getPref("string", PREF_INTERVAL, "500");
     const interval = Number.parseInt(configured, 10);
     return Number.isFinite(interval) && interval > 0 ? Math.max(200, interval) : 500;
+  }
+
+  function getReloadDebounce() {
+    const configured = Number(getPref("string", PREF_DEBOUNCE, "300"));
+    if (!Number.isInteger(configured)) {
+      return 300;
+    }
+    return Math.min(2000, Math.max(50, configured));
   }
 
   function chromeWindows() {
@@ -321,13 +330,13 @@
     initialScanComplete = true;
 
     if (changed) {
-      if (pendingReload) {
+      if (pendingReload !== null) {
         clearTimeout(pendingReload);
       }
       pendingReload = setTimeout(() => {
         pendingReload = null;
         reloadNow();
-      }, 300);
+      }, getReloadDebounce());
     }
     } finally {
       tickInProgress = false;
@@ -723,6 +732,7 @@
     window.__userChromeHotReloadInitialized = false;
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+    Services.prefs.removeObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
     Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
     Services.prefs.removeObserver(PREF_PATH, watchConfigPrefObserver);
     Services.prefs.removeObserver(PREF_NESTED, watchConfigPrefObserver);
@@ -761,6 +771,19 @@
       }
       clearInterval(pollTimer);
       pollTimer = setInterval(tick, getPollInterval());
+    },
+  };
+
+  const reloadDebouncePrefObserver = {
+    observe() {
+      if (pendingReload === null) {
+        return;
+      }
+      clearTimeout(pendingReload);
+      pendingReload = setTimeout(() => {
+        pendingReload = null;
+        reloadNow();
+      }, getReloadDebounce());
     },
   };
 
@@ -821,6 +844,7 @@
   function init() {
     Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
+    Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
     Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
     Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
     Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
