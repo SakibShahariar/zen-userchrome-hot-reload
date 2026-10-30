@@ -15,6 +15,8 @@
   const PREF_RELOAD_CONTENT = "extensions.zen-userchrome-hot-reload.reload-content";
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_DEBUG = "extensions.zen-userchrome-hot-reload.debug-logging";
+  const RELOAD_MENU_ITEM_ID = "zen-userchrome-hot-reload-reload-now";
+  const RELOAD_MENU_SEPARATOR_ID = "zen-userchrome-hot-reload-reload-now-separator";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
   const PREF_EXCLUDED_DIRS = "extensions.zen-userchrome-hot-reload.excluded-dirs";
@@ -32,6 +34,9 @@
   let directoryCache = new Map();
   let pendingReload = null;
   let pendingChangedFiles = new Map();
+  let reloadMenuItem = null;
+  let reloadMenuSeparator = null;
+  let reloadMenuCommandHandler = null;
   let reloadInProgress = false;
   let reloadRequested = false;
   let tickInProgress = false;
@@ -699,6 +704,57 @@
     }
   }
 
+  function updateReloadMenuItem() {
+    if (!reloadMenuItem) {
+      return;
+    }
+    if (getPref("bool", PREF_ENABLED, true)) {
+      reloadMenuItem.removeAttribute("disabled");
+    } else {
+      reloadMenuItem.setAttribute("disabled", "true");
+    }
+  }
+
+  function setupReloadMenuItem() {
+    const doc = window.document;
+    const popup = doc.getElementById("appMenu-popup");
+    if (!popup || typeof doc.createXULElement !== "function") {
+      debugLog("App menu unavailable; use the configured hotkey for manual reloads");
+      return;
+    }
+    if (reloadMenuItem?.isConnected) {
+      updateReloadMenuItem();
+      return;
+    }
+
+    doc.getElementById(RELOAD_MENU_ITEM_ID)?.remove();
+    doc.getElementById(RELOAD_MENU_SEPARATOR_ID)?.remove();
+    reloadMenuSeparator = doc.createXULElement("menuseparator");
+    reloadMenuSeparator.id = RELOAD_MENU_SEPARATOR_ID;
+    reloadMenuItem = doc.createXULElement("menuitem");
+    reloadMenuItem.id = RELOAD_MENU_ITEM_ID;
+    reloadMenuItem.setAttribute("label", "Reload userChrome.css & userContent.css now");
+    reloadMenuItem.setAttribute("tooltiptext", "Reload the enabled stylesheets immediately");
+    reloadMenuCommandHandler = () => {
+      void reloadNow();
+    };
+    reloadMenuItem.addEventListener("command", reloadMenuCommandHandler);
+    popup.appendChild(reloadMenuSeparator);
+    popup.appendChild(reloadMenuItem);
+    updateReloadMenuItem();
+  }
+
+  function removeReloadMenuItem() {
+    if (reloadMenuItem && reloadMenuCommandHandler) {
+      reloadMenuItem.removeEventListener("command", reloadMenuCommandHandler);
+    }
+    reloadMenuItem?.remove();
+    reloadMenuSeparator?.remove();
+    reloadMenuItem = null;
+    reloadMenuSeparator = null;
+    reloadMenuCommandHandler = null;
+  }
+
   function registerContentActor() {
     try {
       ChromeUtils.registerWindowActor(ACTOR_NAME, {
@@ -838,6 +894,7 @@
       clearTimeout(pendingReload);
       pendingReload = null;
     }
+    removeReloadMenuItem();
     window.__userChromeHotReloadInitialized = false;
     Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
     Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
@@ -915,6 +972,7 @@
 
   const enabledPrefObserver = {
     observe() {
+      updateReloadMenuItem();
       if (!getPref("bool", PREF_ENABLED, true)) {
         // Remove the now-inert key listener immediately while disabled.
         setupHotkey();
@@ -963,6 +1021,7 @@
     Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
     Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
     Services.prefs.addObserver(PREF_EXCLUDED_DIRS, watchConfigPrefObserver);
+    setupReloadMenuItem();
     setupHotkey();
     window.__userChromeHotReloadStartWatcher = startWatcher;
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
