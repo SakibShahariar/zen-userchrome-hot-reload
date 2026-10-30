@@ -889,12 +889,17 @@
       }
     }
     const reloadTime = recentReloadAt ? new Date(recentReloadAt).toLocaleString() : "Never";
+    const chromeScope = getPref("bool", PREF_RELOAD_CHROME, true) ? "on" : "off";
+    const contentScope = getPref("bool", PREF_RELOAD_CONTENT, true) ? "on" : "off";
+    const sineScope = getPref("bool", PREF_SINE, true) ? "on" : "off";
     reloadMenuItem.setAttribute("label", "Reload stylesheets now (" + status + ")");
     reloadMenuItem.setAttribute(
       "tooltiptext",
       "Watcher: " + status +
       "\nWatch path: " + effectiveWatchRoot +
       "\nPoll interval: " + effectivePollInterval + " ms" +
+      "\nReload scopes: chrome " + chromeScope + ", content " + contentScope + ", Sine " + sineScope +
+      "\nDebounce: " + getReloadDebounce() + " ms" +
       "\nLast reload: " + reloadTime + " (" + recentReloadStatus + ")"
     );
     if (enabled && !paused) {
@@ -1148,6 +1153,9 @@
       Services.prefs.removeObserver(PREF_PAUSED, pausePrefObserver);
       Services.prefs.removeObserver(PREF_INTERVAL, pollIntervalPrefObserver);
       Services.prefs.removeObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
+      Services.prefs.removeObserver(PREF_RELOAD_CHROME, reloadScopePrefObserver);
+      Services.prefs.removeObserver(PREF_RELOAD_CONTENT, reloadScopePrefObserver);
+      Services.prefs.removeObserver(PREF_SINE, reloadScopePrefObserver);
       Services.prefs.removeObserver(PREF_HOTKEY, hotkeyPrefObserver);
       Services.prefs.removeObserver(PREF_PATH, watchConfigPrefObserver);
       Services.prefs.removeObserver(PREF_NESTED, watchConfigPrefObserver);
@@ -1215,6 +1223,12 @@
         pendingReload = null;
         reloadNow();
       }, getReloadDebounce());
+    },
+  };
+
+  const reloadScopePrefObserver = {
+    observe() {
+      notifyReloadStatusChange();
     },
   };
 
@@ -1344,6 +1358,9 @@
       Services.prefs.addObserver(PREF_PAUSED, pausePrefObserver);
       Services.prefs.addObserver(PREF_INTERVAL, pollIntervalPrefObserver);
       Services.prefs.addObserver(PREF_DEBOUNCE, reloadDebouncePrefObserver);
+      Services.prefs.addObserver(PREF_RELOAD_CHROME, reloadScopePrefObserver);
+      Services.prefs.addObserver(PREF_RELOAD_CONTENT, reloadScopePrefObserver);
+      Services.prefs.addObserver(PREF_SINE, reloadScopePrefObserver);
       Services.prefs.addObserver(PREF_HOTKEY, hotkeyPrefObserver);
       Services.prefs.addObserver(PREF_PATH, watchConfigPrefObserver);
       Services.prefs.addObserver(PREF_NESTED, watchConfigPrefObserver);
