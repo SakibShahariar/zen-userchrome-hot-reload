@@ -58,6 +58,9 @@
   let lastWatchRootError = null;
   let lastExcludedDirsWarning = null;
   let lastDirectoryScanWarning = null;
+  let sineTrackingAvailable = false;
+  let sineStylePaths = new Set();
+  let sineMetadataFingerprint = null;
 
   function getPref(type, name, fallback) {
     try {
@@ -258,7 +261,104 @@
     return windows;
   }
 
+  function isSineManagedPath(path) {
+    const sineModsDir = PathUtils.join(profileChromeDir, "sine-mods");
+    return path === PathUtils.join(sineModsDir, "mods.json") ||
+      path.startsWith(sineModsDir + "/") ||
+      path.startsWith(sineModsDir + "\\");
+  }
+
+  async function collectSineCssFiles(paths, root) {
+    if (root !== profileChromeDir) {
+      sineTrackingAvailable = false;
+      return;
+    }
+
+    const sineModsDir = PathUtils.join(profileChromeDir, "sine-mods");
+    const metadataPath = PathUtils.join(sineModsDir, "mods.json");
+    try {
+      const metadataStat = await IOUtils.stat(metadataPath);
+      if (metadataStat.type !== "regular") {
+        throw new Error("Sine mods metadata is not a regular file");
+      }
+
+      const fingerprint = metadataStat.lastModified + ":" + metadataStat.size;
+      if (fingerprint !== sineMetadataFingerprint) {
+        const mods = await IOUtils.readJSON(metadataPath);
+        if (!mods || typeof mods !== "object" || Array.isArray(mods)) {
+          throw new Error("Sine mods metadata has an invalid structure");
+        }
+
+        const stylePaths = new Set();
+        for (const [id, mod] of Object.entries(mods)) {
+          if (
+            !id ||
+            id === "." ||
+            id === ".." ||
+            /[\\/\\\\:\\0]/.test(id) ||
+            !mod ||
+            mod.enabled !== true
+          ) {
+            continue;
+          }
+
+          const styleEntries = typeof mod.style === "string"
+            ? [["chrome", mod.style]]
+            : Object.entries(mod.style ?? {});
+          for (const [scope, relativePath] of styleEntries) {
+            if (scope !== "chrome" && scope !== "content") {
+              continue;
+            }
+            if (typeof relativePath !== "string" || !relativePath.trim()) {
+              continue;
+            }
+            const segments = relativePath.split("/");
+            if (
+              relativePath.startsWith("/") ||
+              relativePath.includes("\\\\") ||
+              segments.some((segment) => !segment || segment === "." || segment === "..")
+            ) {
+              debugLog("Ignoring unsafe Sine stylesheet path", { id, relativePath });
+              continue;
+            }
+            stylePaths.add(PathUtils.join(sineModsDir, id, ...segments));
+          }
+        }
+        sineStylePaths = stylePaths;
+        sineMetadataFingerprint = fingerprint;
+      }
+
+      paths.set(metadataPath, {
+        lastModified: metadataStat.lastModified,
+        size: metadataStat.size,
+      });
+      const styleStats = await Promise.all(
+        [...sineStylePaths].map(async (path) => {
+          try {
+            const info = await IOUtils.stat(path);
+            return [path, info.type === "regular"
+              ? { lastModified: info.lastModified, size: info.size }
+              : { lastModified: null, size: null }];
+          } catch (e) {
+            // Keep missing styles tracked so creating the file later is detected.
+            return [path, { lastModified: null, size: null }];
+          }
+        })
+      );
+      for (const [path, info] of styleStats) {
+        paths.set(path, info);
+      }
+      sineTrackingAvailable = true;
+    } catch (e) {
+      sineTrackingAvailable = false;
+      sineStylePaths.clear();
+      sineMetadataFingerprint = null;
+      debugLog("Sine stylesheet tracking unavailable; using full-rebuild fallback", String(e));
+    }
+  }
+
   async function collectCssFiles(root) {
+    sineTrackingAvailable = false;
     const paths = new Map();
     const scanTime = Date.now();
     const DIRECTORY_CACHE_REVALIDATION_MS = 10000;
@@ -431,6 +531,7 @@
       reportWatchRootError(root, e);
     }
 
+    await collectSineCssFiles(paths, root);
     return paths;
   }
 
@@ -447,17 +548,15 @@
       return;
     }
 
-    const changedFiles = getPref("bool", PREF_DEBUG, false) ? [] : null;
+    const changedFiles = [];
     let changed = false;
     for (const cachedPath of lastModifiedTimes.keys()) {
       if (!files.has(cachedPath)) {
         lastModifiedTimes.delete(cachedPath);
         if (initialScanComplete) {
           changed = true;
-          if (changedFiles) {
-            changedFiles.push({ action: "removed", path: cachedPath });
-            pendingChangedFiles.set(cachedPath, "removed");
-          }
+          changedFiles.push({ action: "removed", path: cachedPath });
+          pendingChangedFiles.set(cachedPath, "removed");
         }
       }
     }
@@ -467,10 +566,8 @@
         lastModifiedTimes.set(path, current);
         if (initialScanComplete) {
           changed = true;
-          if (changedFiles) {
-            changedFiles.push({ action: "added", path });
-            pendingChangedFiles.set(path, "added");
-          }
+          changedFiles.push({ action: "added", path });
+          pendingChangedFiles.set(path, "added");
         }
       } else if (
         typeof previous !== "object" ||
@@ -479,10 +576,8 @@
       ) {
         lastModifiedTimes.set(path, current);
         changed = true;
-        if (changedFiles) {
-          changedFiles.push({ action: "modified", path });
-          pendingChangedFiles.set(path, "modified");
-        }
+        changedFiles.push({ action: "modified", path });
+        pendingChangedFiles.set(path, "modified");
       }
     }
 
@@ -491,7 +586,7 @@
       cssFileCount: files.size,
       changedFileCount: changedFiles?.length ?? 0,
     });
-    if (changedFiles?.length) {
+    if (changedFiles.length) {
       const visibleChanges = changedFiles.slice(0, 20);
       debugLog("CSS file changes detected", {
         total: changedFiles.length,
@@ -748,11 +843,23 @@
       } else {
         debugLog("Reload requested without pending CSS file changes");
       }
-      const chromeOk = getPref("bool", PREF_RELOAD_CHROME, true)
-        ? (chromeReloadCompatibilityAvailable ? reloadChromeSheets() : "unavailable")
-        : "disabled";
-      let contentOk = "disabled";
-      if (getPref("bool", PREF_RELOAD_CONTENT, true)) {
+      const hasFileChanges = changedFiles.length > 0;
+      const hasSineChanges = changedFiles.some(({ path }) => isSineManagedPath(path));
+      const hasNonSineChanges = changedFiles.some(({ path }) => !isSineManagedPath(path));
+      // If Sine's metadata cannot be read, retain the previous conservative behavior.
+      // Manual reloads also refresh every enabled scope.
+      const fullReloadFallback = !hasFileChanges || !sineTrackingAvailable;
+      const shouldReloadChrome = fullReloadFallback || hasNonSineChanges;
+      const shouldReloadContent = fullReloadFallback || hasNonSineChanges;
+      const shouldReloadSine = fullReloadFallback || hasSineChanges;
+
+      const chromeOk = !shouldReloadChrome
+        ? "unchanged"
+        : getPref("bool", PREF_RELOAD_CHROME, true)
+          ? (chromeReloadCompatibilityAvailable ? reloadChromeSheets() : "unavailable")
+          : "disabled";
+      let contentOk = shouldReloadContent ? "disabled" : "unchanged";
+      if (shouldReloadContent && getPref("bool", PREF_RELOAD_CONTENT, true)) {
         try {
           contentOk = contentReloadCompatibilityAvailable ? await reloadContentSheets() : "unavailable";
         } catch (e) {
@@ -760,7 +867,7 @@
           contentOk = false;
         }
       }
-      const sineOk = await reloadSineMods();
+      const sineOk = shouldReloadSine ? await reloadSineMods() : "unchanged";
       const failedAreas = [];
       const completedAreas = [];
       const skippedAreas = [];
@@ -772,6 +879,8 @@
         skippedAreas.push("userChrome.css disabled");
       } else if (chromeOk === "unavailable") {
         skippedAreas.push("userChrome.css reload API unavailable");
+      } else if (chromeOk === "unchanged") {
+        skippedAreas.push("no non-Sine CSS changes");
       }
       if (contentOk === true) {
         completedAreas.push("userContent.css");
@@ -783,6 +892,8 @@
         skippedAreas.push("userContent.css actor API unavailable");
       } else if (contentOk === null) {
         skippedAreas.push("no content documents to refresh");
+      } else if (contentOk === "unchanged") {
+        skippedAreas.push("no non-Sine CSS changes");
       }
       if (sineOk === true) {
         completedAreas.push("Sine mods");
@@ -790,6 +901,8 @@
         failedAreas.push("Sine mods");
       } else if (sineOk === "unavailable") {
         skippedAreas.push("Sine integration unavailable");
+      } else if (sineOk === "unchanged") {
+        skippedAreas.push("no Sine-managed CSS changes");
       }
 
       setReloadStatus(failedAreas.length ? "Failed" : completedAreas.length ? "Succeeded" : "Skipped");
