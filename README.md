@@ -113,6 +113,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Edit `userContent.css` and confirm existing tabs update; verify an iframe when available.
 - [ ] Verify a cross-origin content iframe is refreshed when eligible; confirm privileged browser UI is excluded and unavailable frames do not prevent other documents from updating.
 - [ ] Regenerate or touch an imported `zen-userChrome.css` file and confirm the change triggers a reload.
+- [ ] Remove or rename a tracked imported CSS file and confirm the entrypoint reload removes stale imported styles.
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
@@ -126,7 +127,8 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - `userContent.css` is refreshed in already-open documents; documents opened **after** a
   change already pick up fresh content from the engine.
 - CSS cached inside `@import` chains is re-read when the entrypoint is re-registered +
-  `chrome-flush-caches` runs; if you hit a stale-import case, regenerate the entrypoint too.
+  `chrome-flush-caches` runs. Addition, modification, removal, and rename of tracked CSS files
+  trigger that entrypoint reload; if you hit a stale-import case, regenerate the entrypoint too.
 
 ## License
 
