@@ -47,7 +47,7 @@
     "type": "string",
     "property": "extensions.zen-userchrome-hot-reload.watch-path",
     "label": "Custom Watch Path",
-    "description": "Absolute path to a file or directory to watch. Leave empty to use this profile's chrome directory; the resolved effective path appears in debug logs.",
+    "description": "Absolute path to one file or directory, or a JSON array of absolute paths for multiple roots (for example, [\"/path/to/chrome\", \"/path/to/generated-css\"]). Leave empty to use this profile's chrome directory.",
     "defaultValue": ""
   },
   {

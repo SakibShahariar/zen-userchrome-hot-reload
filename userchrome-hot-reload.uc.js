@@ -169,8 +169,52 @@
     return result;
   }
 
+  function getWatchRoots() {
+    const raw = getPref("string", PREF_PATH, "");
+    if (!raw) return [profileChromeDir];
+    let configuredRoots;
+    if (raw.startsWith("[")) {
+      try { configuredRoots = JSON.parse(raw); }
+      catch (e) {
+        reportWatchRootError(raw, "watch-path must be a valid JSON array of absolute paths");
+        return [profileChromeDir];
+      }
+      if (!Array.isArray(configuredRoots)) {
+        reportWatchRootError(raw, "watch-path JSON value must be an array");
+        return [profileChromeDir];
+      }
+    } else configuredRoots = [raw];
+
+    const roots = [];
+    const seen = new Set();
+    for (const entry of configuredRoots) {
+      if (typeof entry !== "string" || !entry.trim()) {
+        reportWatchRootError(raw, "every watch root must be a non-empty absolute path");
+        continue;
+      }
+      const candidate = entry.trim();
+      if (!candidate.startsWith("/") && !/^[A-Za-z]:[\\/]/.test(candidate) && !candidate.startsWith("\\\\")) {
+        reportWatchRootError(raw, "every watch root must be an absolute path");
+        continue;
+      }
+      const root = /^[A-Za-z]:[\\/]+$/.test(candidate)
+        ? candidate.slice(0, 3)
+        : candidate.length > 1 ? candidate.replace(/[\\/]+$/, "") : candidate;
+      if (!seen.has(root)) {
+        seen.add(root);
+        roots.push(root);
+      }
+    }
+    if (!roots.length) {
+      reportWatchRootError(raw, "no valid watch roots were configured");
+      return [profileChromeDir];
+    }
+    lastWatchRootError = null;
+    return roots;
+  }
+
   function getWatchRoot() {
-    return getPref("string", PREF_PATH, "") || profileChromeDir;
+    return getWatchRoots().join(", ");
   }
 
   function reportWatchRootError(root, error) {
@@ -571,15 +615,14 @@
     };
   }
 
-  async function collectCssFiles(root) {
-    sineTrackingAvailable = false;
+  async function collectCssFiles(root, sharedVisitedDirectories = null, pruneDirectoryCache = true, trackSine = true, failedRoots = null) {
     const paths = new Map();
     const scanTime = Date.now();
     const DIRECTORY_CACHE_REVALIDATION_MS = 10000;
     const watchNested = getPref("bool", PREF_NESTED, false);
     const excludedDirectories = getExcludedDirectories();
 
-    const visitedDirectories = new Set();
+    const visitedDirectories = sharedVisitedDirectories ?? new Set();
     const MAX_DIRECTORY_SCAN_DEPTH = 64;
 
     function warnSkippedDirectory(directory, reason) {
@@ -609,6 +652,7 @@
       } catch (e) {
         directoryCache.delete(directory);
         if (directory === root) {
+          failedRoots?.add(root);
           reportWatchRootError(directory, e);
         }
         return;
@@ -637,6 +681,7 @@
         } catch (e) {
           directoryCache.delete(directory);
           if (directory === root) {
+            failedRoots?.add(root);
             reportWatchRootError(directory, e);
           } else {
             console.warn("[UserChrome Hot-Reload] Failed to read directory:", directory, e);
@@ -720,13 +765,13 @@
     try {
       const stat = await IOUtils.stat(root);
       if (stat.type === "regular") {
-        directoryCache.clear();
+        if (pruneDirectoryCache) directoryCache.clear();
         lastWatchRootError = null;
         paths.set(root, { lastModified: stat.lastModified, size: stat.size });
         return paths;
       }
       if (stat.type !== "directory") {
-        directoryCache.clear();
+        if (pruneDirectoryCache) directoryCache.clear();
         reportWatchRootError(root, `expected a file or directory, found ${stat.type}`);
         return paths;
       }
@@ -735,18 +780,44 @@
       await scanDirectory(root, false);
 
       // Drop cache entries for directories removed or excluded since the last poll.
-      for (const cachedDirectory of directoryCache.keys()) {
-        if (!visitedDirectories.has(cachedDirectory)) {
-          directoryCache.delete(cachedDirectory);
+      if (pruneDirectoryCache) {
+        for (const cachedDirectory of directoryCache.keys()) {
+          if (!visitedDirectories.has(cachedDirectory)) directoryCache.delete(cachedDirectory);
         }
       }
     } catch (e) {
-      directoryCache.clear();
+      if (pruneDirectoryCache) directoryCache.clear();
+      failedRoots?.add(root);
       reportWatchRootError(root, e);
     }
 
-    await collectSineCssFiles(paths, root);
+    if (trackSine && root === profileChromeDir) await collectSineCssFiles(paths, root);
     return paths;
+  }
+
+  async function collectCssFilesForRoots(roots) {
+    const files = new Map();
+    const visitedDirectories = new Set();
+    const failedRoots = new Set();
+    const includesProfileChrome = roots.includes(profileChromeDir);
+    sineTrackingAvailable = false;
+    for (const root of roots) {
+      const rootFiles = await collectCssFiles(root, visitedDirectories, false, false, failedRoots);
+      for (const [path, info] of rootFiles) files.set(path, info);
+    }
+    // Keep last-known fingerprints when a root is temporarily unreadable.
+    for (const root of failedRoots) {
+      for (const [path, info] of lastModifiedTimes) {
+        if (path === root || path.startsWith(root + "/") || path.startsWith(root + "\\")) {
+          if (!files.has(path)) files.set(path, info);
+        }
+      }
+    }
+    for (const cachedDirectory of directoryCache.keys()) {
+      if (!visitedDirectories.has(cachedDirectory)) directoryCache.delete(cachedDirectory);
+    }
+    if (includesProfileChrome) await collectSineCssFiles(files, profileChromeDir);
+    return files;
   }
 
   async function tick() {
@@ -756,8 +827,8 @@
     tickInProgress = true;
     const generation = watcherGeneration;
     try {
-    const watchRoot = getWatchRoot();
-    const files = await collectCssFiles(watchRoot);
+    const watchRoots = getWatchRoots();
+    const files = await collectCssFilesForRoots(watchRoots);
     if (!watcherActive || generation !== watcherGeneration) {
       return;
     }
@@ -796,7 +867,7 @@
     }
 
     debugLog("Scan completed", {
-      watchRoot,
+      watchRoots,
       cssFileCount: files.size,
       changedFileCount: changedFiles?.length ?? 0,
     });
@@ -1066,7 +1137,7 @@
       let shouldReloadContent = !hasFileChanges;
 
       if (hasFileChanges && cssChangedPaths.length) {
-        const dependencies = await getActiveStylesheetDependencies(await collectCssFiles(getWatchRoot()));
+        const dependencies = await getActiveStylesheetDependencies(await collectCssFilesForRoots(getWatchRoots()));
         if (!dependencies.known) {
           // Incomplete import graphs must never suppress a potentially relevant reload.
           shouldReloadChrome = true;
@@ -1417,7 +1488,7 @@
       reloadNow();
     }
 
-    debugLog("Watcher started", { watchRoot: getWatchRoot(), pollIntervalMs: getPollInterval() });
+    debugLog("Watcher started", { watchRoots: getWatchRoots(), pollIntervalMs: getPollInterval() });
   }
 
   function yieldWatcher() {

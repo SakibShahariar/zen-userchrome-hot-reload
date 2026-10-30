@@ -25,6 +25,7 @@ function createHarness() {
     "/profile/chrome/content.css",
   ];
   let children = [...entryFiles];
+  const extraRoots = new Map();
   let cssModified = 1;
   const cssFileStats = new Map(entryFiles.map((path) => [path, { lastModified: 1, size: 10 }]));
   const cssTexts = new Map([
@@ -49,6 +50,9 @@ function createHarness() {
       if (path === "/profile/chrome") {
         return { type: "directory", lastModified: 1, size: children.length };
       }
+      if (extraRoots.has(path)) {
+        return { type: "directory", lastModified: 1, size: extraRoots.get(path).length };
+      }
       if (path === "/profile/chrome/sine-mods/mods.json") {
         return {
           type: "regular",
@@ -59,7 +63,7 @@ function createHarness() {
       if (path === "/profile/chrome/sine-mods/test-mod/theme.css") {
         return { type: "regular", lastModified: sineStyleModified, size: 20 };
       }
-      if (cssFileStats.has(path) && children.includes(path)) {
+      if (cssFileStats.has(path) && (children.includes(path) || [...extraRoots.values()].some((paths) => paths.includes(path)))) {
         return { type: "regular", ...cssFileStats.get(path) };
       }
       throw new Error("Path not found: " + path);
@@ -76,8 +80,8 @@ function createHarness() {
       }
       return structuredClone(sineModsData);
     },
-    async getChildren() {
-      return [...children];
+    async getChildren(path) {
+      return [...(path === "/profile/chrome" ? children : extraRoots.get(path) ?? [])];
     },
   };
 
@@ -201,6 +205,14 @@ function createHarness() {
     flushAsyncWork,
     setCssFiles(paths) {
       children = [...new Set([...entryFiles, ...paths])];
+      for (const path of paths) {
+        cssModified += 1;
+        cssFileStats.set(path, { lastModified: cssModified, size: 10 });
+        if (!cssTexts.has(path)) cssTexts.set(path, "");
+      }
+    },
+    setExtraRoot(root, paths) {
+      extraRoots.set(root, [...paths]);
       for (const path of paths) {
         cssModified += 1;
         cssFileStats.set(path, { lastModified: cssModified, size: 10 });
@@ -416,4 +428,48 @@ test("userContent-only dependencies do not reload browser chrome", async () => {
 
   assert.equal(harness.sheetLoads(), 0,
     "a userContent.css-only dependency should not reload userChrome.css");
+});
+
+
+test("multiple watch roots detect CSS changes outside the profile chrome directory", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", '["/profile/chrome", "/external/styles"]');
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  harness.setExtraRoot("/external/styles", ["/external/styles/generated.css"]);
+  harness.setCssText("/profile/chrome/userChrome.css", '@import "file:///external/styles/generated.css";');
+  await harness.flushAsyncWork();
+  harness.modifyCssFile("/external/styles/generated.css", ".generated { color: green; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.equal(harness.sheetLoads(), 1, "a secondary root change should trigger one reload");
+});
+
+test("duplicate watch roots do not duplicate a changed CSS path", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", '["/profile/chrome", "/profile/chrome"]');
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+  harness.modifyCssFile("/profile/chrome/active.css", ".active { color: orange; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.equal(harness.sheetLoads(), 1, "the same path must only trigger one reload");
+});
+
+test("Sine tracking works when profile chrome is not the first configured root", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setManager(win);
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", '["/external/styles", "/profile/chrome"]');
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-sine-mods", true);
+  harness.setExtraRoot("/external/styles", ["/external/styles/generated.css"]);
+  await harness.flushAsyncWork();
+  harness.modifySineStyle();
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.deepEqual(harness.rebuildCalls, [[false, true]], "Sine stylesheet tracking must remain enabled");
 });

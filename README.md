@@ -25,7 +25,11 @@ Useful with [Matugen](https://github.com/InioX/matugen), pywal, and scripts that
 ## Install
 
 1. Open **Sine settings → Sine Mods** and choose **Add custom mod**.
-2. Paste this repository URL: `https://github.com/SakibShahariar/zen-userchrome-hot-reload`.
+2. Copy and paste this repository URL:
+
+   ```text
+   https://github.com/SakibShahariar/zen-userchrome-hot-reload
+   ```
 3. Enable the mod, then restart Zen once (or toggle the mod off and on).
 
 ## Use

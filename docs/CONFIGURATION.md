@@ -8,7 +8,7 @@ Sine builds the settings UI from `preferences.json`. Changes are stored in the Z
 | `paused` | `false` | Temporarily suspend watching and manual reload actions. |
 | `reload-chrome` | `true` | Reload `userChrome.css`. |
 | `reload-content` | `true` | Reload `userContent.css` in eligible open documents. |
-| `watch-path` | empty | File or directory to watch. Empty uses the profile's `chrome` directory. |
+| `watch-path` | empty | One absolute file/directory path, or a JSON array of absolute paths (for example, `["/path/to/chrome", "/path/to/generated-css"]`). Empty uses the profile's `chrome` directory. Duplicate roots are ignored. |
 | `poll-interval-ms` | `500` | Poll interval; clamped to 200–5000 ms. Invalid or blank values use 500 ms. |
 | `reload-debounce-ms` | `300` | Delay after the latest detected change; clamped to 50–2000 ms. |
 | `watch-nested-directories` | `false` | Include nested directories in scans. |
@@ -44,7 +44,7 @@ Adjust paths to match your profile and template locations.
 - The watcher checks for file changes on the configured interval and waits for the debounce period before reloading.
 - With the default profile chrome watch path, local `@import` dependencies from `userChrome.css` and `userContent.css` determine which stylesheet scope needs refreshing. Tracked CSS files outside both import graphs are ignored. If an entrypoint or imported file cannot be read, an import cannot be resolved, or a dependency is outside the watch set, the watcher falls back to refreshing both scopes rather than risk missing a relevant change.
 - When Sine's `sine-mods/mods.json` is readable, only enabled mods' declared chrome/content stylesheets and that metadata file trigger a Sine stylesheet rebuild. Ordinary profile CSS edits do not rebuild Sine; the rebuild refreshes styles without reloading mod JavaScript. If Sine metadata cannot be read, the watcher keeps the conservative full-rebuild fallback. Manual reload still refreshes all enabled scopes.
-- By default it watches top-level CSS files and `mods/*.css`. Nested scans honor exclusions and stop at a depth limit to avoid unbounded symlink traversal.
+- By default it watches top-level CSS files and `mods/*.css`. Nested scans honor exclusions and stop at a depth limit to avoid unbounded symlink traversal. To watch multiple roots, enter a JSON array of absolute paths in **Watch path**; a single path remains supported. Overlapping roots are de-duplicated during scanning.
 - Content refresh targets eligible documents already open when a change occurs. New documents use the current stylesheet on navigation/open.
 - Automatic watching and stylesheet reloads depend on privileged Zen/Gecko APIs. Missing APIs are reported in the Browser Console; available manual paths may still work.
 - Reload status is written to the Browser Console when the status-notification setting is enabled. The mod avoids mutating Zen's internal toast UI because that depends on private Fluent message IDs.\n- If Sine rebuilding is unavailable, stylesheet reload can continue without it.
