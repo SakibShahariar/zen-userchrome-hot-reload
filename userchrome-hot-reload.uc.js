@@ -357,6 +357,218 @@
     }
   }
 
+  function parseCssImports(cssText) {
+    const imports = [];
+    let index = 0;
+
+    function skipWhitespaceAndComments() {
+      while (index < cssText.length) {
+        if (/\\s/.test(cssText[index])) {
+          index += 1;
+          continue;
+        }
+        if (cssText.startsWith("/*", index)) {
+          const end = cssText.indexOf("*/", index + 2);
+          if (end === -1) {
+            return false;
+          }
+          index = end + 2;
+          continue;
+        }
+        break;
+      }
+      return true;
+    }
+
+    function readQuotedString() {
+      const quote = cssText[index];
+      if (quote !== "\"" && quote !== "'") {
+        return null;
+      }
+      index += 1;
+      let value = "";
+      while (index < cssText.length) {
+        const char = cssText[index++];
+        if (char === quote) {
+          return value;
+        }
+        // CSS escapes need decoding before path resolution. Fall back rather
+        // than guessing which file an escaped import refers to.
+        if (char === "\\\\" || char === "\\n" || char === "\\r" || char === "\\f") {
+          return null;
+        }
+        value += char;
+      }
+      return null;
+    }
+
+    while (index < cssText.length) {
+      if (cssText.startsWith("/*", index)) {
+        const end = cssText.indexOf("*/", index + 2);
+        if (end === -1) {
+          return null;
+        }
+        index = end + 2;
+        continue;
+      }
+      const current = cssText[index];
+      if (current === "\"" || current === "'") {
+        const quote = current;
+        index += 1;
+        while (index < cssText.length) {
+          const char = cssText[index++];
+          if (char === "\\\\" && index < cssText.length) {
+            index += 1;
+          } else if (char === quote) {
+            break;
+          }
+        }
+        continue;
+      }
+
+      if (
+        current !== "@" ||
+        cssText.slice(index, index + 7).toLowerCase() !== "@import" ||
+        /[\\w-]/.test(cssText[index + 7] ?? "")
+      ) {
+        index += 1;
+        continue;
+      }
+
+      index += 7;
+      if (!skipWhitespaceAndComments()) {
+        return null;
+      }
+
+      let target = null;
+      if (cssText[index] === "\"" || cssText[index] === "'") {
+        target = readQuotedString();
+      } else if (cssText.slice(index, index + 4).toLowerCase() === "url(") {
+        index += 4;
+        if (!skipWhitespaceAndComments()) {
+          return null;
+        }
+        if (cssText[index] === "\"" || cssText[index] === "'") {
+          target = readQuotedString();
+          if (target === null || !skipWhitespaceAndComments() || cssText[index] !== ")") {
+            return null;
+          }
+          index += 1;
+        } else {
+          const start = index;
+          while (index < cssText.length && cssText[index] !== ")") {
+            const char = cssText[index];
+            if (/\\s/.test(char) || char === "\\\\" || char === "\"" || char === "'") {
+              return null;
+            }
+            index += 1;
+          }
+          if (index >= cssText.length) {
+            return null;
+          }
+          target = cssText.slice(start, index);
+          index += 1;
+        }
+      } else {
+        return null;
+      }
+
+      if (target === null || !target.trim()) {
+        return null;
+      }
+      imports.push(target.trim());
+    }
+    return imports;
+  }
+
+  function resolveLocalCssImport(importPath, sourcePath) {
+    if (/^(?:https?:|data:|chrome:|resource:|moz-extension:|\\/\\/)/i.test(importPath)) {
+      return null;
+    }
+    const baseURI = Services.io.newURI(PathUtils.toFileURI(sourcePath));
+    const uri = Services.io.newURI(importPath, null, baseURI);
+    if (uri.scheme !== "file") {
+      return null;
+    }
+    if (typeof Ci === "undefined" || !Ci.nsIFileURL) {
+      throw new Error("Ci.nsIFileURL is unavailable");
+    }
+    return uri.QueryInterface(Ci.nsIFileURL).file.path;
+  }
+
+  async function collectCssDependencyPaths(entryPath, trackedPaths, dependencies, visited, depth = 0) {
+    if (depth > 64) {
+      return false;
+    }
+    if (visited.has(entryPath)) {
+      return true;
+    }
+    if (!trackedPaths.has(entryPath)) {
+      return false;
+    }
+
+    visited.add(entryPath);
+    dependencies.add(entryPath);
+    let cssText;
+    try {
+      cssText = await IOUtils.readUTF8(entryPath);
+    } catch (e) {
+      return false;
+    }
+
+    const imports = parseCssImports(cssText);
+    if (imports === null) {
+      return false;
+    }
+    for (const importPath of imports) {
+      let resolvedPath;
+      try {
+        resolvedPath = resolveLocalCssImport(importPath, entryPath);
+      } catch (e) {
+        return false;
+      }
+      if (resolvedPath === null) {
+        continue;
+      }
+      if (!trackedPaths.has(resolvedPath)) {
+        return false;
+      }
+      if (!await collectCssDependencyPaths(
+        resolvedPath,
+        trackedPaths,
+        dependencies,
+        visited,
+        depth + 1
+      )) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function getActiveStylesheetDependencies(files) {
+    const trackedPaths = new Set(files.keys());
+    const chromePaths = new Set();
+    const contentPaths = new Set();
+    const chromeKnown = await collectCssDependencyPaths(
+      chromeEntryPath,
+      trackedPaths,
+      chromePaths,
+      new Set()
+    );
+    const contentKnown = await collectCssDependencyPaths(
+      contentEntryPath,
+      trackedPaths,
+      contentPaths,
+      new Set()
+    );
+    return {
+      known: chromeKnown && contentKnown,
+      chromePaths,
+      contentPaths,
+    };
+  }
+
   async function collectCssFiles(root) {
     sineTrackingAvailable = false;
     const paths = new Map();
@@ -845,13 +1057,27 @@
       }
       const hasFileChanges = changedFiles.length > 0;
       const hasSineChanges = changedFiles.some(({ path }) => isSineManagedPath(path));
-      const hasNonSineChanges = changedFiles.some(({ path }) => !isSineManagedPath(path));
-      // If Sine's metadata cannot be read, retain the previous conservative behavior.
-      // Manual reloads also refresh every enabled scope.
-      const fullReloadFallback = !hasFileChanges || !sineTrackingAvailable;
-      const shouldReloadChrome = fullReloadFallback || hasNonSineChanges;
-      const shouldReloadContent = fullReloadFallback || hasNonSineChanges;
-      const shouldReloadSine = fullReloadFallback || hasSineChanges;
+      const cssChangedPaths = changedFiles
+        .map(({ path }) => path)
+        .filter((path) => path.toLowerCase().endsWith(".css"));
+      let shouldReloadChrome = !hasFileChanges;
+      let shouldReloadContent = !hasFileChanges;
+
+      if (hasFileChanges && cssChangedPaths.length) {
+        const dependencies = await getActiveStylesheetDependencies(await collectCssFiles(getWatchRoot()));
+        if (!dependencies.known) {
+          // Incomplete import graphs must never suppress a potentially relevant reload.
+          shouldReloadChrome = true;
+          shouldReloadContent = true;
+        } else {
+          shouldReloadChrome = cssChangedPaths.some((path) => dependencies.chromePaths.has(path));
+          shouldReloadContent = cssChangedPaths.some((path) => dependencies.contentPaths.has(path));
+        }
+      }
+
+      // If Sine metadata cannot be read, retain the previous conservative rebuild fallback.
+      // Manual reloads refresh every enabled scope regardless of the import graph.
+      const shouldReloadSine = !hasFileChanges || !sineTrackingAvailable || hasSineChanges;
 
       const chromeOk = !shouldReloadChrome
         ? "unchanged"
@@ -880,7 +1106,7 @@
       } else if (chromeOk === "unavailable") {
         skippedAreas.push("userChrome.css reload API unavailable");
       } else if (chromeOk === "unchanged") {
-        skippedAreas.push("no non-Sine CSS changes");
+        skippedAreas.push("no userChrome.css dependency changed");
       }
       if (contentOk === true) {
         completedAreas.push("userContent.css");
@@ -893,7 +1119,7 @@
       } else if (contentOk === null) {
         skippedAreas.push("no content documents to refresh");
       } else if (contentOk === "unchanged") {
-        skippedAreas.push("no non-Sine CSS changes");
+        skippedAreas.push("no userContent.css dependency changed");
       }
       if (sineOk === true) {
         completedAreas.push("Sine mods");
