@@ -37,6 +37,7 @@
   let hotkeyRegistered = false;
   let hotkeyListener = null;
   let lastWatchRootError = null;
+  let lastDirectoryScanWarning = null;
 
   function getPref(type, name, fallback) {
     try {
@@ -109,8 +110,28 @@
     );
 
     const visitedDirectories = new Set();
+    const MAX_DIRECTORY_SCAN_DEPTH = 64;
 
-    async function scanDirectory(directory, recursive) {
+    function warnSkippedDirectory(directory, reason) {
+      const key = `${root}:${reason}`;
+      if (lastDirectoryScanWarning === key) {
+        return;
+      }
+      lastDirectoryScanWarning = key;
+      console.warn("[UserChrome Hot-Reload] Skipping recursive CSS directory:", directory, reason);
+    }
+
+    async function scanDirectory(directory, recursive, depth = 0) {
+      // A symlink can keep extending its own path, so path de-duplication alone
+      // is insufficient. Bound depth as a final guard against such cycles.
+      if (depth > MAX_DIRECTORY_SCAN_DEPTH) {
+        warnSkippedDirectory(directory, `maximum depth (${MAX_DIRECTORY_SCAN_DEPTH}) reached; possible symlink cycle`);
+        return;
+      }
+      if (visitedDirectories.has(directory)) {
+        warnSkippedDirectory(directory, "directory already visited; possible symlink cycle");
+        return;
+      }
       visitedDirectories.add(directory);
       let directoryStat;
       try {
@@ -211,12 +232,12 @@
         // Preserve the existing default: root CSS files and one level inside mods/.
         if (!recursive) {
           if (baseName === "mods") {
-            await scanDirectory(child, watchNested);
+            await scanDirectory(child, watchNested, depth + 1);
           } else if (watchNested) {
-            await scanDirectory(child, true);
+            await scanDirectory(child, true, depth + 1);
           }
         } else {
-          await scanDirectory(child, true);
+          await scanDirectory(child, true, depth + 1);
         }
       }
     }
