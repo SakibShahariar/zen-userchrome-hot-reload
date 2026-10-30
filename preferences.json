@@ -17,6 +17,13 @@
   },
   {
     "type": "checkbox",
+    "property": "extensions.zen-userchrome-hot-reload.paused",
+    "label": "Pause watcher",
+    "description": "Temporarily stop polling and manual reload shortcuts without disabling the mod or losing watcher state. Resume to continue.",
+    "defaultValue": false
+  },
+  {
+    "type": "checkbox",
     "property": "extensions.zen-userchrome-hot-reload.reload-chrome",
     "label": "Reload userChrome.css",
     "description": "Reload browser chrome styles when a tracked CSS file changes or a manual reload is triggered.",
