@@ -105,6 +105,9 @@
     if (!servicesAvailable || typeof Services.wm?.getMostRecentWindow !== "function") {
       missingWatcher.push("Services.wm.getMostRecentWindow");
     }
+    if (!servicesAvailable || typeof Services.wm?.getEnumerator !== "function") {
+      missingWatcher.push("Services.wm.getEnumerator");
+    }
 
     if (!pathUtilsAvailable || typeof PathUtils.toFileURI !== "function") {
       missingChromeReload.push("PathUtils.toFileURI");
@@ -683,6 +686,10 @@
     if (!getPref("bool", PREF_SINE, true)) {
       return null;
     }
+    if (typeof Services === "undefined" || typeof Services.wm?.getMostRecentWindow !== "function") {
+      console.info("[UserChrome Hot-Reload] Sine integration unavailable because Services.wm is missing.");
+      return "unavailable";
+    }
     try {
       const win = Services.wm.getMostRecentWindow("navigator:browser");
       const manager = win?.manager;
@@ -1158,7 +1165,7 @@
       }
 
       setupHotkey();
-      if (Services.wm.getMostRecentWindow("navigator:browser") !== window) {
+      if (typeof Services.wm?.getMostRecentWindow !== "function" || Services.wm.getMostRecentWindow("navigator:browser") !== window) {
         return;
       }
 
@@ -1211,7 +1218,7 @@
         }
         return;
       }
-      if (Services.wm.getMostRecentWindow("navigator:browser") !== window) {
+      if (typeof Services.wm?.getMostRecentWindow !== "function" || Services.wm.getMostRecentWindow("navigator:browser") !== window) {
         return;
       }
 
