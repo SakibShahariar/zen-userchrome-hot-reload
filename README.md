@@ -82,10 +82,10 @@ Open Zen's application menu and choose **Reload userChrome.css & userContent.css
 | `extensions.zen-userchrome-hot-reload.reload-content` | `true` | Reload `userContent.css`; disable for chrome-only workflows. |
 | `extensions.zen-userchrome-hot-reload.debug-logging` | `false` | Opt-in local scan, changed-file, reload, actor, and watcher-handoff diagnostics. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch; leave empty to use the profile chrome directory. Invalid or unreadable paths are reported in the Browser Console rather than silently replaced. |
-| `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
+| `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval, clamped to 200–5000 ms. Invalid or blank values use 500 ms. |
 | `extensions.zen-userchrome-hot-reload.reload-debounce-ms` | `300` | Delay after the latest detected change before reloading; clamped to 50–2000 ms and applied immediately to a pending reload. |
 | `extensions.zen-userchrome-hot-reload.watch-nested-directories` | `false` | Also scan nested directories for CSS, respecting the excluded-directory list. |
-| `extensions.zen-userchrome-hot-reload.excluded-dirs` | `sine-mods,JS,utils` | Comma-separated directory names to skip while scanning. Leave empty to exclude none. |
+| `extensions.zen-userchrome-hot-reload.excluded-dirs` | `sine-mods,JS,utils` | Comma-separated single directory names; invalid path segments are ignored with a warning. Leave empty to exclude none. |
 | `extensions.zen-userchrome-hot-reload.reload-sine-mods` | `true` | Also trigger `manager.rebuildMods()`. |
 | `extensions.zen-userchrome-hot-reload.toast` | `true` | Show a Zen toast after each reload. |
 | `extensions.zen-userchrome-hot-reload.hotkey` | `Ctrl+Shift+F5` | Force a reload from any browser window. Single-key shortcuts such as `F5` are supported; `CMD` and `SUPER` are aliases for `META`. Bare printable keys may conflict with browser shortcuts or text entry. Empty disables. |
@@ -137,6 +137,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Change the reload debounce while a reload is pending; confirm the timer is rescheduled once and invalid values fall back safely or clamp to the documented bounds.
 - [ ] With nested watching enabled, create a directory symlink back to an ancestor; confirm scanning remains bounded, normal nested CSS is still found, and a warning identifies the skipped path.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
+- [ ] Try blank, non-numeric, below-range, and above-range poll/debounce values; verify documented defaults and clamps. Try malformed hotkeys and exclusion paths; confirm clear warnings and valid legacy values still work.
 
 ## Troubleshooting
 
