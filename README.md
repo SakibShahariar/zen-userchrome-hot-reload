@@ -21,6 +21,7 @@ but for the browser UI. Its primary use case is live theming:
 1. **Watcher** — a single polling watcher monitors the profile `chrome/` directory (top-level `*.css` +
    `mods/*.css` by default; optional recursive scanning can include deeper CSS directories).
    Directories listed in the `excluded-dirs` preference are skipped; the defaults are `sine-mods/`, `JS/`, and `utils/` to avoid self-triggering loops.
+   Recursive scans skip repeated directory paths and stop beyond 64 directory levels to bound symlink cycles.
    Ownership transfers to another open browser window if the watcher owner closes. Tracks mtimes
    via `IOUtils.stat`, default 500ms, debounced 300ms.
 2. **Chrome reload** — for every browser window: `windowUtils.removeSheet(uri, USER_SHEET)`
@@ -120,6 +121,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Verify `META`, `CMD`, and `SUPER` modifier spellings trigger the same platform Meta key behavior.
 - [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
 - [ ] Change the watch path, nested-directory setting, and excluded-directory list; confirm the next scan uses the new settings without duplicate polling.
+- [ ] With nested watching enabled, create a directory symlink back to an ancestor; confirm scanning remains bounded, normal nested CSS is still found, and a warning identifies the skipped path.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
 
 ## Notes / limitations
