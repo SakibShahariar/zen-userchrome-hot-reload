@@ -14,7 +14,7 @@ but for the browser UI. Its primary use case is live theming:
 
 ## Contents
 
-[How it works](#how-it-works) · [Install](#install) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Troubleshooting](#troubleshooting) · [Notes / limitations](#notes--limitations) · [License](#license)
+[How it works](#how-it-works) · [Install](#install) · [Manual reload](#manual-reload) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Troubleshooting](#troubleshooting) · [Notes / limitations](#notes--limitations) · [License](#license)
 
 ## How it works
 
@@ -68,6 +68,10 @@ Options:
 
 Restart Zen (or toggle the mod off/on in Sine Mods) once so the script loads. Disable the mod
 in Sine settings when you don't want it watching.
+
+## Manual reload
+
+Open Zen's application menu and choose **Reload userChrome.css & userContent.css now**. The action uses the same coalescing, reload-scope preferences, and status reporting as the configured hotkey. If the application menu is unavailable in a particular Zen build, the hotkey remains available.
 
 ## Preferences
 
@@ -123,6 +127,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Replace a tracked CSS file atomically and add/remove files in a watched directory; confirm file metadata changes are detected on the next poll and directory listing changes are found by the periodic revalidation.
 - [ ] Open multiple browser windows, close the current watcher-owner window, and confirm reloading continues.
 - [ ] Trigger a manual reload with the configured hotkey.
+- [ ] Trigger a manual reload from the Zen application menu; confirm it respects the independent stylesheet toggles and does not create a second poller.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
 - [ ] Disable `userContent.css` reload and confirm no content actors are contacted; disable `userChrome.css` reload and confirm chrome sheets are not touched; restore both defaults.
 - [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
