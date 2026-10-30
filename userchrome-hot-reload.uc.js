@@ -509,7 +509,7 @@
         console.error("[UserChrome Hot-Reload] Could not enumerate content documents; reload status is unknown.");
         return false;
       }
-      console.info("[UserChrome Hot-Reload] No eligible content documents available; skipping content stylesheet refresh.");
+      debugLog("No eligible content documents; skipping userContent.css refresh.");
       return null;
     }
 
