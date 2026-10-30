@@ -352,7 +352,7 @@
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(chromeEntryPath));
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Invalid userChrome.css URI:", e);
+      console.error("[UserChrome Hot-Reload] Invalid userChrome.css path:", chromeEntryPath, e);
       return false;
     }
 
@@ -370,7 +370,7 @@
         loaded = true;
       } catch (e) {
         // A window may be closing; continue reloading the remaining windows.
-        console.warn("[UserChrome Hot-Reload] Failed to reload chrome sheet:", e);
+        console.warn("[UserChrome Hot-Reload] Failed to reload userChrome.css:", chromeEntryPath, e);
       }
     }
 
@@ -413,7 +413,7 @@
     try {
       uri = Services.io.newURI(PathUtils.toFileURI(contentEntryPath)).spec;
     } catch (e) {
-      console.error("[UserChrome Hot-Reload] Invalid userContent.css URI:", e);
+      console.error("[UserChrome Hot-Reload] Invalid userContent.css path:", contentEntryPath, e);
       return false;
     }
 
@@ -465,7 +465,7 @@
             }
           } catch (e) {
             // A frame may navigate or close between enumeration and dispatch.
-            console.warn("[UserChrome Hot-Reload] Could not contact a content actor:", e);
+            console.warn("[UserChrome Hot-Reload] Could not reload userContent.css in a content frame:", contentEntryPath, e);
           }
         }
       }
@@ -486,25 +486,37 @@
     );
     if (failed.length) {
       console.error(
-        "[UserChrome Hot-Reload] Failed to refresh content sheets in",
-        failed.length,
-        "of",
-        results.length,
-        "document(s)."
+        `[UserChrome Hot-Reload] Failed to refresh userContent.css (${contentEntryPath}) in ${failed.length} of ${results.length} document(s).`
       );
+      for (const result of failed) {
+        const reason =
+          result.status === "rejected"
+            ? result.reason
+            : result.value?.error ?? result.value;
+        console.error("[UserChrome Hot-Reload] userContent.css reload failure:", reason);
+      }
     }
     return failed.length === 0;
   }
 
-  function reloadSineMods() {
+  async function reloadSineMods() {
     if (!getPref("bool", PREF_SINE, true)) {
-      return;
+      return null;
     }
     try {
       const win = Services.wm.getMostRecentWindow("navigator:browser");
-      win?.manager?.rebuildMods?.(true, true);
+      const manager = win?.manager;
+      if (typeof manager?.rebuildMods !== "function") {
+        console.info(
+          "[UserChrome Hot-Reload] Sine integration unavailable; CSS reload remains active, but Sine-managed mods will not be rebuilt. Install or enable Sine, then restart Zen."
+        );
+        return "unavailable";
+      }
+      const result = await manager.rebuildMods(true, true);
+      return result !== false;
     } catch (e) {
-      console.warn("[UserChrome Hot-Reload] Failed to rebuild Sine mods:", e);
+      console.error("[UserChrome Hot-Reload] Failed to rebuild Sine-managed mods:", e);
+      return false;
     }
   }
 
@@ -567,27 +579,47 @@
       } catch (e) {
         console.error("[UserChrome Hot-Reload] Content reload request failed:", e);
       }
-      reloadSineMods();
+      const sineOk = await reloadSineMods();
+      const failedAreas = [];
+      if (!chromeOk) {
+        failedAreas.push("userChrome.css");
+      }
+      if (contentOk === false) {
+        failedAreas.push("userContent.css");
+      }
+      if (sineOk === false) {
+        failedAreas.push("Sine mods");
+      }
 
-      if (contentOk === null) {
-        const message = chromeOk
-          ? "UserChrome reloaded; no content documents to refresh."
-          : "UserChrome reload failed; no content documents to refresh.";
-        if (!chromeOk) {
-          console.error("[UserChrome Hot-Reload] UserChrome reload failed; no content documents were available to refresh.");
+      if (failedAreas.length) {
+        console.error(
+          "[UserChrome Hot-Reload] Reload failed for:",
+          failedAreas.join(", "),
+          ". See the preceding Browser Console entries for details."
+        );
+        const unavailableSuffix =
+          sineOk === "unavailable" ? " Sine integration is unavailable." : "";
+        showToast(
+          `${failedAreas.join(" & ")} reload failed. Check Browser Console.${unavailableSuffix}`
+        );
+      } else if (contentOk === null) {
+        const completedAreas = ["userChrome.css"];
+        if (sineOk === true) {
+          completedAreas.push("Sine mods");
         }
-        showToast(message);
-      } else if (chromeOk && contentOk) {
-        showToast("UserChrome & Content reloaded");
-      } else if (chromeOk) {
-        console.error("[UserChrome Hot-Reload] UserChrome reloaded, but userContent.css failed to reload. Check the Browser Console.");
-        showToast("UserChrome reloaded; content reload failed. Check the Browser Console.");
-      } else if (contentOk) {
-        console.error("[UserChrome Hot-Reload] userContent.css reloaded, but userChrome.css failed to reload. Check the Browser Console.");
-        showToast("Content reloaded; UserChrome reload failed. Check the Browser Console.");
+        const unavailableSuffix =
+          sineOk === "unavailable" ? "; Sine integration unavailable" : "";
+        showToast(
+          `${completedAreas.join(" & ")} reloaded; no content documents to refresh${unavailableSuffix}.`
+        );
       } else {
-        console.error("[UserChrome Hot-Reload] Both UserChrome and content reloads failed. Check the Browser Console.");
-        showToast("UserChrome and content reload failed. Check the Browser Console.");
+        const completedAreas = ["userChrome.css", "userContent.css"];
+        if (sineOk === true) {
+          completedAreas.push("Sine mods");
+        }
+        const unavailableSuffix =
+          sineOk === "unavailable" ? "; Sine integration unavailable" : "";
+        showToast(`${completedAreas.join(" & ")} reloaded${unavailableSuffix}.`);
       }
     } finally {
       reloadInProgress = false;
