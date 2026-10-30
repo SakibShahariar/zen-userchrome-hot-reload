@@ -77,7 +77,6 @@ in Sine settings when you don't want it watching.
 | `extensions.zen-userchrome-hot-reload.reload-chrome` | `true` | Reload `userChrome.css`; disable for content-only workflows. |
 | `extensions.zen-userchrome-hot-reload.reload-content` | `true` | Reload `userContent.css`; disable for chrome-only workflows. |
 | `extensions.zen-userchrome-hot-reload.debug-logging` | `false` | Opt-in local scan, changed-file, reload, actor, and watcher-handoff diagnostics. |
-| `extensions.zen-userchrome-hot-reload.debug-logging` | `false` | Opt-in local scan, changed-file, reload, actor, and watcher-handoff diagnostics. |
 | `extensions.zen-userchrome-hot-reload.watch-path` | *(empty)* | Custom file or directory to watch; leave empty to use the profile chrome directory. Invalid or unreadable paths are reported in the Browser Console rather than silently replaced. |
 | `extensions.zen-userchrome-hot-reload.poll-interval-ms` | `500` | Watcher poll interval. |
 | `extensions.zen-userchrome-hot-reload.reload-debounce-ms` | `300` | Delay after the latest detected change before reloading; clamped to 50–2000 ms and applied immediately to a pending reload. |
@@ -126,7 +125,6 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
 - [ ] Disable `userContent.css` reload and confirm no content actors are contacted; disable `userChrome.css` reload and confirm chrome sheets are not touched; restore both defaults.
-- [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
 - [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
 - [ ] Verify `META`, `CMD`, and `SUPER` modifier spellings trigger the same platform Meta key behavior.
 - [ ] Disable hot reload through its preference and confirm changes stop triggering reloads; re-enable it and confirm watching resumes.
