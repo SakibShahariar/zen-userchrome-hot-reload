@@ -132,6 +132,7 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Trigger a manual reload with the configured hotkey.
 - [ ] Trigger a manual reload from the Zen application menu; confirm it respects the independent stylesheet toggles and does not create a second poller.
 - [ ] Pause watching, confirm polling and hotkey/menu reloads stop, then resume; verify the prior scan state returns and only one poller runs across open windows.
+- [ ] While paused, close the watcher-owner window and open another; confirm paused state transfers and resume starts only one watcher.
 - [ ] Set the hotkey to `F5`, then restore `Ctrl+Shift+F5`; confirm a blank or malformed shortcut disables registration.
 - [ ] Disable `userContent.css` reload and confirm no content actors are contacted; disable `userChrome.css` reload and confirm chrome sheets are not touched; restore both defaults.
 - [ ] Enable debug logging, add/change/remove CSS files, and confirm the Browser Console reports action and path for up to 20 files plus an omitted count; disable it and confirm normal scans stay quiet.
