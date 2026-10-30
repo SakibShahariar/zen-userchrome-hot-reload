@@ -14,7 +14,7 @@ but for the browser UI. Its primary use case is live theming:
 
 ## Contents
 
-[How it works](#how-it-works) · [Install](#install) · [Manual reload](#manual-reload) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Manual QA](#manual-qa) · [Troubleshooting](#troubleshooting) · [Notes / limitations](#notes--limitations) · [License](#license)
+[How it works](#how-it-works) · [Install](#install) · [Manual reload](#manual-reload) · [Preferences](#preferences) · [Matugen setup](#matugen-setup-reference) · [Compatibility](#compatibility) · [Manual QA](#manual-qa) · [Troubleshooting](#troubleshooting) · [Notes / limitations](#notes--limitations) · [License](#license)
 
 ## How it works
 
@@ -144,6 +144,17 @@ Run this checklist in Zen Browser before a release or after changes to the watch
 - [ ] Simulate or reproduce a chrome stylesheet load failure in one browser window; confirm a partial failure is reported even if another window reloads successfully. Check the Browser Console for CSS parser diagnostics.
 - [ ] Configure a missing, unreadable, and non-file/non-directory watch path; confirm one actionable Browser Console error appears and clearing the custom path restores the profile chrome directory.
 - [ ] Try blank, non-numeric, below-range, and above-range poll/debounce values; verify documented defaults and clamps. Try malformed hotkeys and exclusion paths; confirm clear warnings and valid legacy values still work.
+
+## Compatibility
+
+This mod targets Zen Browser's privileged chrome environment. It does not pin a numeric minimum version; it feature-detects the APIs it needs at startup because Zen/Gecko APIs can change independently of version strings.
+
+- **Automatic watching** requires `IOUtils.stat`, `IOUtils.getChildren`, `PathUtils.join/filename`, and the relevant `Services.prefs` / `Services.wm` APIs. If these are missing, automatic polling is disabled while available manual reload paths remain usable.
+- **userChrome.css reload** requires `PathUtils.toFileURI`, `Services.io.newURI`, `Services.obs.notifyObservers`, and per-window `windowUtils.loadSheet` support.
+- **userContent.css reload** requires `ChromeUtils.registerWindowActor` and the content window-actor APIs. If unavailable, only content stylesheet reload is skipped.
+- **Sine integration and Zen toasts** are optional. CSS reload remains available when Sine is not installed; status falls back to the Browser Console if the toast API is unavailable.
+
+When a required API is missing, the Browser Console warning includes the detected browser name/version and the missing API. Enable local debug logging for the complete compatibility report. Other Gecko-based browsers are not guaranteed to provide Zen/Sine-specific integrations.
 
 ## Troubleshooting
 
