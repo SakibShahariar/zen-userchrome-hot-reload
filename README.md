@@ -75,6 +75,8 @@ Open Zen's application menu and choose **Reload userChrome.css & userContent.css
 
 ## Preferences
 
+The Sine settings UI is generated from `preferences.json`; changes are stored in the profile's preferences. An empty custom watch path resolves to the current profile's `chrome` directory. Enable local debug logging to see the resolved path and scan counts. Numeric bounds and invalid-input fallbacks are enforced by the script.
+
 | Preference | Default | Description |
 | --- | --- | --- |
 | `extensions.zen-userchrome-hot-reload.enabled` | `true` | Enable or disable hot reload in this profile; changes apply immediately. |
