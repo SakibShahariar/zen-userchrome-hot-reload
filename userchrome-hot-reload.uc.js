@@ -101,6 +101,8 @@
 
   async function collectCssFiles(root) {
     const paths = new Map();
+    const scanTime = Date.now();
+    const DIRECTORY_CACHE_REVALIDATION_MS = 10000;
     const watchNested = getPref("bool", PREF_NESTED, false);
     const excludedDirectories = new Set(
       getPref("string", PREF_EXCLUDED_DIRS, "sine-mods,JS,utils")
@@ -149,7 +151,11 @@
       }
 
       const cached = directoryCache.get(directory);
+      const cacheAge = cached ? scanTime - cached.lastFullScan : Infinity;
       const canReuse = cached &&
+        Number.isFinite(cacheAge) &&
+        cacheAge >= 0 &&
+        cacheAge < DIRECTORY_CACHE_REVALIDATION_MS &&
         cached.lastModified === directoryStat.lastModified &&
         cached.size === directoryStat.size;
       let entries;
@@ -191,6 +197,7 @@
         directoryCache.set(directory, {
           lastModified: directoryStat.lastModified,
           size: directoryStat.size,
+          lastFullScan: scanTime,
           entries,
         });
         refreshed = true;
