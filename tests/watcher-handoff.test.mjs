@@ -9,6 +9,12 @@ const source = readFileSync(sourcePath, "utf8");
 
 function createHarness() {
   const windows = [];
+  const prefValues = new Map([
+    ["extensions.zen-userchrome-hot-reload.reload-chrome", false],
+    ["extensions.zen-userchrome-hot-reload.reload-content", false],
+    ["extensions.zen-userchrome-hot-reload.reload-sine-mods", false],
+  ]);
+  const prefObservers = new Map();
   const intervals = new Map();
   const timeouts = new Map();
   let nextTimerId = 1;
@@ -47,19 +53,20 @@ function createHarness() {
     };
     windows.push(win);
 
-    const prefs = new Map([
-      ["extensions.zen-userchrome-hot-reload.reload-chrome", false],
-      ["extensions.zen-userchrome-hot-reload.reload-content", false],
-      ["extensions.zen-userchrome-hot-reload.reload-sine-mods", false],
-    ]);
     const services = {
       prefs: {
-        prefHasUserValue: (name) => prefs.has(name),
-        getBoolPref: (name) => prefs.get(name),
-        getStringPref: (name) => prefs.get(name),
-        getIntPref: (name) => prefs.get(name),
-        addObserver() {},
-        removeObserver() {},
+        prefHasUserValue: (name) => prefValues.has(name),
+        getBoolPref: (name) => prefValues.get(name),
+        getStringPref: (name) => prefValues.get(name),
+        getIntPref: (name) => prefValues.get(name),
+        addObserver(name, observer) {
+          const observers = prefObservers.get(name) ?? [];
+          observers.push(observer);
+          prefObservers.set(name, observers);
+        },
+        removeObserver(name, observer) {
+          prefObservers.set(name, (prefObservers.get(name) ?? []).filter((item) => item !== observer));
+        },
       },
       wm: {
         getMostRecentWindow: () => windows.at(-1) ?? null,
@@ -124,6 +131,10 @@ function createHarness() {
 
   return {
     addWindow,
+    setPref(name, value) {
+      prefValues.set(name, value);
+      for (const observer of prefObservers.get(name) ?? []) observer.observe();
+    },
     intervals,
     timeouts,
     flushAsyncWork,
@@ -177,4 +188,31 @@ test("a pending debounced change is reloaded when watcher ownership moves", asyn
   assert.equal(harness.timeouts.size, 0, "handoff should cancel the old window's debounce timer");
   assert.equal(second.__userChromeHotReloadLastReloadStatus, "Skipped",
     "handoff should force one reload pass for the pending change");
+});
+
+test("pause, resume, disable, and re-enable keep one watcher across windows", async () => {
+  const harness = createHarness();
+  const first = harness.addWindow();
+  await harness.flushAsyncWork();
+  const second = harness.addWindow();
+  await harness.flushAsyncWork();
+  assert.equal(harness.activePollers(), 1);
+  assert.equal(second.__userChromeHotReloadIsWatcherOwner, true);
+
+  const pausedPref = "extensions.zen-userchrome-hot-reload.paused";
+  harness.setPref(pausedPref, true);
+  assert.equal(harness.activePollers(), 0, "pausing should stop the only poller");
+  harness.setPref(pausedPref, false);
+  await harness.flushAsyncWork();
+  assert.equal(harness.activePollers(), 1, "resuming should restore one poller");
+  assert.equal(second.__userChromeHotReloadIsWatcherOwner, true);
+
+  const enabledPref = "extensions.zen-userchrome-hot-reload.enabled";
+  harness.setPref(enabledPref, false);
+  assert.equal(harness.activePollers(), 0, "disabling should stop polling in every window");
+  harness.setPref(enabledPref, true);
+  await harness.flushAsyncWork();
+  assert.equal(harness.activePollers(), 1, "re-enabling should start only one poller");
+  assert.equal(second.__userChromeHotReloadIsWatcherOwner, true);
+  assert.equal(first.__userChromeHotReloadIsWatcherOwner, false);
 });
