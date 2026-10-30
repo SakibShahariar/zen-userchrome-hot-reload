@@ -18,8 +18,22 @@ function createHarness() {
   const intervals = new Map();
   const timeouts = new Map();
   let nextTimerId = 1;
-  let children = [];
+  const entryFiles = [
+    "/profile/chrome/userChrome.css",
+    "/profile/chrome/userContent.css",
+    "/profile/chrome/active.css",
+    "/profile/chrome/content.css",
+  ];
+  let children = [...entryFiles];
   let cssModified = 1;
+  const cssFileStats = new Map(entryFiles.map((path) => [path, { lastModified: 1, size: 10 }]));
+  const cssTexts = new Map([
+    ["/profile/chrome/userChrome.css", '@import "active.css";'],
+    ["/profile/chrome/userContent.css", '@import url("content.css");'],
+    ["/profile/chrome/active.css", ".active { color: red; }"],
+    ["/profile/chrome/content.css", ".content { color: blue; }"],
+  ]);
+  let sheetLoads = 0;
   let sineMetadataModified = 1;
   let sineStyleModified = 1;
   let sineModsData = {
@@ -45,10 +59,16 @@ function createHarness() {
       if (path === "/profile/chrome/sine-mods/test-mod/theme.css") {
         return { type: "regular", lastModified: sineStyleModified, size: 20 };
       }
-      if (children.includes(path)) {
-        return { type: "regular", lastModified: cssModified, size: 10 };
+      if (cssFileStats.has(path) && children.includes(path)) {
+        return { type: "regular", ...cssFileStats.get(path) };
       }
       throw new Error("Path not found: " + path);
+    },
+    async readUTF8(path) {
+      if (!cssTexts.has(path)) {
+        throw new Error("CSS file not found: " + path);
+      }
+      return cssTexts.get(path);
     },
     async readJSON(path) {
       if (path !== "/profile/chrome/sine-mods/mods.json") {
@@ -72,7 +92,11 @@ function createHarness() {
       removeEventListener(name, callback) {
         if (listeners.get(name) === callback) listeners.delete(name);
       },
-      windowUtils: { USER_SHEET: 0, removeSheet() {}, loadSheet() {} },
+      windowUtils: {
+        USER_SHEET: 0,
+        removeSheet() {},
+        loadSheet() { sheetLoads += 1; },
+      },
       gBrowser: { tabs: [] },
       __listeners: listeners,
     };
@@ -104,7 +128,18 @@ function createHarness() {
         },
       },
       appinfo: { name: "Test Browser", version: "1" },
-      io: { newURI: (spec) => ({ spec }) },
+      io: {
+        newURI(spec, charset, baseURI) {
+          const parsed = baseURI ? new URL(spec, baseURI.spec) : new URL(spec);
+          return {
+            spec: parsed.href,
+            scheme: parsed.protocol.slice(0, -1),
+            QueryInterface() {
+              return { file: { path: decodeURIComponent(parsed.pathname) } };
+            },
+          };
+        },
+      },
       obs: { notifyObservers() {} },
     };
 
@@ -119,6 +154,7 @@ function createHarness() {
         toFileURI: (path) => "file://" + path,
       },
       ChromeUtils: { registerWindowActor() {} },
+      Ci: { nsIFileURL: {} },
       setInterval(callback) {
         const id = nextTimerId++;
         intervals.set(id, { callback, window: win });
@@ -164,9 +200,23 @@ function createHarness() {
     timeouts,
     flushAsyncWork,
     setCssFiles(paths) {
-      children = [...paths];
-      cssModified += 1;
+      children = [...new Set([...entryFiles, ...paths])];
+      for (const path of paths) {
+        cssModified += 1;
+        cssFileStats.set(path, { lastModified: cssModified, size: 10 });
+        if (!cssTexts.has(path)) cssTexts.set(path, "");
+      }
     },
+    modifyCssFile(path, content) {
+      cssModified += 1;
+      cssFileStats.set(path, { lastModified: cssModified, size: content.length });
+      cssTexts.set(path, content);
+    },
+    setCssText(path, content) {
+      cssTexts.set(path, content);
+      cssFileStats.set(path, { lastModified: cssModified, size: content.length });
+    },
+    sheetLoads: () => sheetLoads,
     modifySineStyle() {
       sineStyleModified += 1;
     },
@@ -303,4 +353,35 @@ test("Sine metadata changes trigger a rebuild and refresh the tracked style path
   await harness.runDebouncedReload();
   assert.deepEqual(harness.rebuildCalls, [[false, true]],
     "changing Sine's mod metadata should rebuild its generated styles");
+});
+
+
+test("unimported CSS files do not reload active stylesheets", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+
+  harness.setCssFiles(["/profile/chrome/unused.css"]);
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+
+  assert.equal(harness.sheetLoads(), 0,
+    "a tracked CSS file outside both entrypoint import graphs should be ignored");
+});
+
+test("CSS imported by userChrome.css reloads only the chrome stylesheet", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+
+  harness.modifyCssFile("/profile/chrome/active.css", ".active { color: green; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+
+  assert.equal(harness.sheetLoads(), 1,
+    "a CSS dependency of userChrome.css should reload the browser chrome stylesheet");
 });
