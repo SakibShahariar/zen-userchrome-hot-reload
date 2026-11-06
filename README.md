@@ -68,3 +68,8 @@ The [manual QA checklist](docs/TESTING.md) documents browser-level tests that re
 ## Settings backup
 
 Use **Export hot-reload settings…** and **Import hot-reload settings…** in Zen's app menu to back up or restore this mod's preferences. The versioned JSON import updates only settings included in the file; unsupported schemas and invalid values are rejected. See [configuration](docs/CONFIGURATION.md#settings-backup-and-restore) for validation and local-path privacy details.
+
+
+## Releases
+
+Release packaging is prepared but no public release has been published yet. Check the [GitHub Releases page](https://github.com/SakibShahariar/zen-userchrome-hot-reload/releases) and follow the [release checklist](docs/RELEASING.md). Do not publish until the live Zen/Sine QA and supported-version matrix are complete.
