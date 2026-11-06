@@ -69,3 +69,11 @@ For each tested environment, add a row to the matrix with:
 - Console errors, reproduction steps, and relevant screenshots/logs for failures.
 
 A successful CI run is not a substitute for this matrix. Keep untested combinations explicitly marked **Not verified**.
+
+
+## Support policy
+
+- Claim support only for an exact Zen version/build and OS/architecture represented by a completed environment record with every required check passing.
+- The minimum tested Zen version is the lowest version that has passed the full matrix; do not infer support for earlier versions.
+- Do not infer support for an untested OS, architecture, Zen channel, or Sine version from a passing result on another combination.
+- If a newer Zen release has not been tested, mark it **Not verified** rather than carrying forward the previous version's result.
