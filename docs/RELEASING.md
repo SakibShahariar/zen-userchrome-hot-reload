@@ -21,6 +21,20 @@ Do not create a release tag until all of the following are true:
 
 The normal Validate workflow builds a disposable `v0.0.0` archive, exercises the actual `v0.1.0` changelog/tag path, and rejects malformed tags on every push. Packaging regressions are therefore caught before a release tag is created.
 
+## Reviewing generated artifacts
+
+After building the candidate archive, inspect and verify it before publishing:
+
+```sh
+python3 scripts/package_release.py v0.1.0
+cd dist
+sha256sum -c SHA256SUMS
+python3 -m zipfile -t zen-userchrome-hot-reload-v0.1.0.zip
+python3 -m zipfile -l zen-userchrome-hot-reload-v0.1.0.zip
+```
+
+The tag workflow creates a draft only. Confirm the ZIP contents, checksum, changelog, and GitHub-generated source archives in the draft before manually publishing it.
+
 ## Distribution contents
 
 The installable ZIP contains the userChrome script, content actor, Sine preferences/theme metadata, license, README, changelog, configuration reference, and manual QA checklist. GitHub adds source-code ZIP and tar.gz archives to the release automatically.
