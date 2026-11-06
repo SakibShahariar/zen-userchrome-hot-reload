@@ -1,6 +1,6 @@
 # Zen compatibility matrix
 
-<badge color="warning">No runtime combinations verified yet</badge>
+> **Not verified:** No runtime combinations have been tested yet.
 
 This repository's GitHub Actions validate JavaScript syntax, configuration, unit tests, and release packaging. They do **not** prove that a given Zen build, Sine version, or operating system works at runtime.
 
