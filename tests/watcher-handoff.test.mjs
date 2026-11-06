@@ -30,6 +30,11 @@ function createHarness() {
   const directoryReadCounts = new Map();
   const statRequests = new Set();
   const fileStatCounts = new Map();
+  const fileStore = new Map();
+  const menuItems = new Map();
+  let filePickerPath = "/tmp/zen-userchrome-hot-reload-settings.json";
+  let filePickerResult = 0;
+  let confirmImport = true;
   const specialEntries = new Map();
   let pathExpandingCycleRoot = null;
   let cssModified = 1;
@@ -89,10 +94,12 @@ function createHarness() {
       return cssTexts.get(path);
     },
     async readJSON(path) {
-      if (path !== "/profile/chrome/sine-mods/mods.json") {
-        throw new Error("Unexpected JSON path: " + path);
-      }
+      if (fileStore.has(path)) return structuredClone(fileStore.get(path));
+      if (path !== "/profile/chrome/sine-mods/mods.json") throw new Error("Unexpected JSON path: " + path);
       return structuredClone(sineModsData);
+    },
+    async writeJSON(path, value) {
+      fileStore.set(path, structuredClone(value));
     },
     async getChildren(path) {
       directoryReadCounts.set(path, (directoryReadCounts.get(path) ?? 0) + 1);
@@ -103,11 +110,31 @@ function createHarness() {
     },
   };
 
-  function addWindow() {
+  function addWindow({ withAppMenu = false } = {}) {
     const listeners = new Map();
+    const popup = withAppMenu ? { appendChild(item) { item.isConnected = true; menuItems.set(item.id, item); } } : null;
+    const document = {
+      getElementById(id) {
+        if (id === "appMenu-popup") return popup;
+        return menuItems.get(id) ?? null;
+      },
+      createXULElement() {
+        const itemListeners = new Map();
+        return {
+          id: null,
+          isConnected: false,
+          setAttribute() {},
+          removeAttribute() {},
+          addEventListener(name, callback) { itemListeners.set(name, callback); },
+          removeEventListener(name, callback) { if (itemListeners.get(name) === callback) itemListeners.delete(name); },
+          remove() { this.isConnected = false; menuItems.delete(this.id); },
+          __listeners: itemListeners,
+        };
+      },
+    };
     const win = {
       closed: false,
-      document: { getElementById: () => null },
+      document,
       addEventListener(name, callback) {
         listeners.set(name, callback);
       },
@@ -130,6 +157,18 @@ function createHarness() {
         getBoolPref: (name) => prefValues.get(name),
         getStringPref: (name) => prefValues.get(name),
         getIntPref: (name) => prefValues.get(name),
+        setBoolPref(name, value) {
+          prefValues.set(name, value);
+          for (const observer of prefObservers.get(name) ?? []) observer.observe();
+        },
+        setStringPref(name, value) {
+          prefValues.set(name, value);
+          for (const observer of prefObservers.get(name) ?? []) observer.observe();
+        },
+        clearUserPref(name) {
+          prefValues.delete(name);
+          for (const observer of prefObservers.get(name) ?? []) observer.observe();
+        },
         addObserver(name, observer) {
           const observers = prefObservers.get(name) ?? [];
           observers.push(observer);
@@ -163,6 +202,7 @@ function createHarness() {
         },
       },
       obs: { notifyObservers() {} },
+      prompt: { confirm() { return confirmImport; } },
     };
 
     const context = vm.createContext({
@@ -176,7 +216,23 @@ function createHarness() {
         toFileURI: (path) => "file://" + path,
       },
       ChromeUtils: { registerWindowActor() {} },
-      Ci: { nsIFileURL: {} },
+      Ci: {
+        nsIFileURL: {},
+        nsIFilePicker: { modeOpen: 0, modeSave: 1, returnOK: 0, returnCancel: 1, returnReplace: 2 },
+      },
+      Cc: {
+        "@mozilla.org/filepicker;1": {
+          createInstance() {
+            return {
+              init() {},
+              appendFilter() {},
+              defaultString: "",
+              file: { path: filePickerPath },
+              open(callback) { callback(filePickerResult); },
+            };
+          },
+        },
+      },
       setInterval(callback) {
         const id = nextTimerId++;
         intervals.set(id, { callback, window: win });
@@ -194,7 +250,9 @@ function createHarness() {
         timeouts.delete(id);
       },
       console: { debug() {}, info() {}, warn() {}, error() {} },
-      Date: { now: () => currentTime },
+      Date: class TestDate extends Date {
+        static now() { return currentTime; }
+      },
       Map,
       Set,
       Promise,
@@ -275,6 +333,18 @@ function createHarness() {
     directoryReadTotal: () => [...directoryReadCounts.values()].reduce((total, count) => total + count, 0),
     wasStatRequested: (path) => statRequests.has(path),
     fileStatCount: (path) => fileStatCounts.get(path) ?? 0,
+    configureFilePicker({ path = filePickerPath, result = 0 } = {}) { filePickerPath = path; filePickerResult = result; },
+    setImportedSettings(path, payload) { fileStore.set(path, structuredClone(payload)); },
+    exportedSettings(path = filePickerPath) { return structuredClone(fileStore.get(path)); },
+    setImportConfirmation(value) { confirmImport = value; },
+    getPreference(name) { return prefValues.get(name); },
+    triggerMenuItem(id) {
+      const item = menuItems.get(id);
+      assert.ok(item, "expected app-menu item");
+      const handler = item.__listeners.get("command");
+      assert.equal(typeof handler, "function");
+      handler();
+    },
     addSpecialEntry(path, type) {
       children.push(path);
       specialEntries.set(path, type);
@@ -680,6 +750,64 @@ test("large nested CSS trees reuse directory listings while refreshing file meta
     "the cache should behave consistently across the full 500-file fixture");
   assert.equal(harness.timeouts.size, 0,
     "an unchanged large tree should not trigger reloads");
+});
+
+test("settings export writes a versioned snapshot of supported preferences", async () => {
+  const harness = createHarness();
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "750");
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
+  await harness.flushAsyncWork();
+
+  const payload = harness.exportedSettings();
+  assert.equal(payload.format, "zen-userchrome-hot-reload-settings");
+  assert.equal(payload.schemaVersion, 1);
+  assert.equal(payload.preferences["poll-interval-ms"], "750");
+  assert.equal(Object.keys(payload.preferences).length, 13);
+});
+
+test("settings import applies only included known preferences after validation", async () => {
+  const harness = createHarness();
+  const path = "/tmp/import-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 1,
+    preferences: { "poll-interval-ms": "900", "reload-chrome": true },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-content", false);
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "900");
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), true);
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-content"), false);
+});
+
+test("unsupported settings schema is rejected without changing preferences", async () => {
+  const harness = createHarness();
+  const path = "/tmp/invalid-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 99,
+    preferences: { "poll-interval-ms": "900" },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
 });
 
 test("a legacy single custom watch path remains supported", async () => {

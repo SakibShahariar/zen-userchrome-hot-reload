@@ -18,6 +18,12 @@ Sine builds the settings UI from `preferences.json`. Changes are stored in the Z
 | `hotkey` | `Ctrl+Shift+F5` | Manual reload shortcut. `CMD` and `SUPER` alias `META`; empty disables it. |
 | `debug-logging` | `false` | Enable local scan, reload, actor, and watcher diagnostics. Logs may include absolute paths. |
 
+## Settings backup and restore
+
+Use **Export hot-reload settings…** and **Import hot-reload settings…** in Zen's app menu to back up or restore this mod's preferences. Exports use JSON schema version 1 and include only this mod's supported preferences. Imports validate the format, schema version, supported preference types, and absolute watch-root paths before applying changes. Only keys present in the import file are updated; omitted settings remain unchanged. Unknown keys are ignored, while unsupported schema versions or invalid supported values are rejected without applying the import.
+
+The export includes the current custom watch path, which may contain a personal local directory. Keep exported settings files private when that path should not be shared.
+
 ## Security and filesystem scope
 
 - **Watch paths are user-selected, not sandboxed.** The setting accepts absolute file or directory paths anywhere the Zen process can read; it is not restricted to the profile. Use only paths you trust. Relative paths are rejected and invalid settings fall back to the profile's `chrome` directory.
