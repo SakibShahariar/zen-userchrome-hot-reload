@@ -58,11 +58,15 @@ def main() -> int:
         corrupt_member = bundle.testzip()
         if corrupt_member is not None:
             raise RuntimeError(f"archive verification failed at {corrupt_member}")
+        if set(bundle.namelist()) != set(FILES):
+            raise RuntimeError("archive contents do not match the declared distribution files")
 
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    (dist / "SHA256SUMS").write_text(
-        f"{digest}  {archive.name}\n", encoding="utf-8"
-    )
+    checksum_file = dist / "SHA256SUMS"
+    expected_checksum = f"{digest}  {archive.name}\\n"
+    checksum_file.write_text(expected_checksum, encoding="utf-8")
+    if checksum_file.read_text(encoding="utf-8") != expected_checksum:
+        raise RuntimeError("checksum file verification failed")
     print(f"Created {archive.relative_to(ROOT)}")
     print(f"SHA-256 {digest}")
     return 0

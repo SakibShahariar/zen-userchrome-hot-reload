@@ -24,11 +24,11 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/zen-userchrome-hot-reload`
 - Default branch: `main`
-- Last fully reviewed checkpoint: `2af6f267ad8b93ddedb115843f68c2e6f0919515`
+- Last fully reviewed checkpoint: `a99d59a66de9942a9285af7d2e4f2b8abe0f2149`
 - Review date: 2026-11-06
-- Reviewed 18 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
+- Reviewed 20 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
 - Combined status endpoint returned empty status lists; authoritative workflow runs were checked directly by exact commit SHA.
-- Commits `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033`, `aad7a9f9c08826459a7d21f1d8ed686d47048411`, and `e44c6b22fa33a8dc9517b688d4e0260e93008565` were checked directly: workflow runs [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691), [42153519557](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153519557), and [42153645328](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153645328) completed successfully, including automated tests. Commit `2af6f267ad8b93ddedb115843f68c2e6f0919515` was checked directly: workflow run [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) completed successfully, including automated tests. The next commit after this checkpoint is the release-packaging preparation commit; its own CI must be checked before advancing the checkpoint again.
+- Commits `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033`, `aad7a9f9c08826459a7d21f1d8ed686d47048411`, and `e44c6b22fa33a8dc9517b688d4e0260e93008565` were checked directly: workflow runs [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691), [42153519557](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153519557), and [42153645328](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153645328) completed successfully, including automated tests. Commit `2af6f267ad8b93ddedb115843f68c2e6f0919515` was checked directly: workflow run [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) completed successfully, including automated tests. Commits `2af6f267ad8b93ddedb115843f68c2e6f0919515` and `a99d59a66de9942a9285af7d2e4f2b8abe0f2149` were checked directly: workflow runs [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) and [42153965391](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153965391) completed successfully, including package validation. The next commit after this checkpoint is the current package-integrity test commit; its own CI must be checked before advancing the checkpoint again.
 
 ## Verified commit results
 
@@ -62,6 +62,9 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 | `2af6f267ad8b93ddedb115843f68c2e6f0919515` | docs: document settings backup and CI verification (#50) | green | [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) | automated tests included |
 
+| `b6e6439cbbd2d3ff153fa860423a0ecdc8631f10` | build: prepare verified release artifacts (#55) | red | [42153937503](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153937503) | package step rejected valid v0.0.0 due to over-escaped semantic-version regex |
+| `a99d59a66de9942a9285af7d2e4f2b8abe0f2149` | fix: validate release tag patterns correctly (#55) | green | [42153965391](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153965391) | automated tests and package archive validation included |
+
 ## Red-cross investigation log
 
 ### 2026-11-06 — settings import/export work (#50)
@@ -70,6 +73,12 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 - Corrective commit `bdbd417fcdcbc37dc4e734858c47cb26585d78bb`: syntax checks passed, but **automated tests failed**. The `settings import applies only included known preferences` test expected `900` but retained `500`; cause: the numeric validation regex was over-escaped and rejected digit strings.
 - Corrective commit `5ca3087526078cbd24a1bcd5082885a906534f2f`: fixed the regex and hardened malformed watch-path array validation. Exact workflow run `42153273243` completed **success**, including syntax, content actor, automated tests, preferences JSON, and theme JSON checks.
 - Classification: both failures were code defects introduced during this feature, not infrastructure failures. Published history is preserved; no amend or force-push performed.
+
+### 2026-11-06 — release packaging work (#55)
+
+- Commit `b6e6439cbbd2d3ff153fa860423a0ecdc8631f10`: **red** at `Validate distributable release archive`; package script rejected the valid test tag `v0.0.0` because the raw semantic-version regex was over-escaped.
+- Corrective commit `a99d59a66de9942a9285af7d2e4f2b8abe0f2149`: corrected semantic-version and changelog heading patterns; exact workflow run `42153965391` completed successfully, including archive build and verification.
+- Classification: code defect, not infrastructure. No release tag or draft release was created.
 
 ## Remaining verification
 
@@ -85,4 +94,4 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | Date | Reviewed range / checkpoint | Result summary |
 |---|---|---|
 | 2026-11-02 | Initial checkpoint `312c162504603e6de79417f937d3f7639a586ef0` | Combined status lookup returned no entries; later direct workflow lookup established the actual results. |
-| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 23 commits checked: 21 green, 2 red. Both failures were diagnosed and corrected by a later green commit. |
+| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 25 commits checked: 22 green, 3 red. Both failures were diagnosed and corrected by a later green commit. |
