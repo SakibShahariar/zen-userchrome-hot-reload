@@ -8,8 +8,8 @@ Do not claim a Zen version or operating system as supported until a real browser
 
 ## Current automated CI baseline
 
-- Commit: `136cfb885cbb5818174f5483186e35ecbfbe2b52`
-- Validate workflow: [run 42154769191](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154769191) — passed.
+- Commit: `67e23358bf4a215f27c70b175c8267907502878c`
+- Validate workflow: [run 42154875316](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154875316) — passed.
 - Covered: JavaScript syntax, automated Node tests, preferences/theme JSON, installable archive integrity, initial changelog/tag validation, and malformed-tag rejection.
 - This is source-level CI evidence only. It does not establish compatibility with any Zen build, Sine version, OS, or live desktop session. Update this baseline after future maintenance commits.
 
