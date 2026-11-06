@@ -73,3 +73,8 @@ Use **Export hot-reload settings…** and **Import hot-reload settings…** in Z
 ## Releases
 
 Release packaging is prepared but no public release has been published yet. Check the [GitHub Releases page](https://github.com/SakibShahariar/zen-userchrome-hot-reload/releases) and follow the [release checklist](docs/RELEASING.md). Do not publish until the live Zen/Sine QA and supported-version matrix are complete.
+
+
+## Compatibility
+
+No Zen version/OS combination is claimed as verified until it has been exercised in a real browser session. See the [compatibility matrix](docs/COMPATIBILITY.md) for recorded evidence.

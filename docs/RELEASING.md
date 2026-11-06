@@ -6,7 +6,7 @@ Do not create a release tag until all of the following are true:
 
 - [ ] The exact default-branch commit has a successful Validate workflow, including automated tests.
 - [ ] The manual checks in [TESTING.md](TESTING.md) have been completed in a real Zen + Sine session.
-- [ ] The compatibility matrix in issue [#58](https://github.com/SakibShahariar/zen-userchrome-hot-reload/issues/58) records tested Zen versions and operating systems.
+- [ ] The [compatibility matrix](COMPATIBILITY.md) records tested Zen versions and operating systems; issue [#58](https://github.com/SakibShahariar/zen-userchrome-hot-reload/issues/58) tracks completion.
 - [ ] The native watcher limitation (#13), selective stylesheet reload limitation (#14), and other known constraints are accurately described.
 - [ ] The changelog section for the release tag is final.
 - [ ] The commit CI ledger has no unexplained red or pending checks.
