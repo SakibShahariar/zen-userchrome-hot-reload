@@ -18,6 +18,7 @@ function createHarness() {
   const intervals = new Map();
   const timeouts = new Map();
   let nextTimerId = 1;
+  let currentTime = 1_000;
   const entryFiles = [
     "/profile/chrome/userChrome.css",
     "/profile/chrome/userContent.css",
@@ -178,7 +179,7 @@ function createHarness() {
         timeouts.delete(id);
       },
       console: { debug() {}, info() {}, warn() {}, error() {} },
-      Date,
+      Date: { now: () => currentTime },
       Map,
       Set,
       Promise,
@@ -226,6 +227,29 @@ function createHarness() {
       cssModified += 1;
       cssFileStats.set(path, { lastModified: cssModified, size: content.length });
       cssTexts.set(path, content);
+    },
+    replaceCssFile(path, content) {
+      const previous = cssFileStats.get(path);
+      assert.ok(previous, "expected the CSS file to exist before replacement");
+      cssModified += 1;
+      cssFileStats.set(path, { lastModified: cssModified, size: previous.size });
+      cssTexts.set(path, content);
+    },
+    renameCssFile(oldPath, newPath) {
+      const index = children.indexOf(oldPath);
+      assert.notEqual(index, -1, "expected the CSS file to exist before rename");
+      const previous = cssFileStats.get(oldPath);
+      children[index] = newPath;
+      cssFileStats.delete(oldPath);
+      cssFileStats.set(newPath, {
+        lastModified: (previous?.lastModified ?? 0) + 1,
+        size: previous?.size ?? 10,
+      });
+      cssTexts.set(newPath, cssTexts.get(oldPath) ?? "");
+      cssTexts.delete(oldPath);
+    },
+    advanceTime(milliseconds) {
+      currentTime += milliseconds;
     },
     setCssText(path, content) {
       cssTexts.set(path, content);
@@ -497,6 +521,49 @@ test("parent and child watch roots scan their overlapping directory only once", 
   assert.equal(harness.sheetLoads(), 1, "the overlapping CSS path should trigger exactly one reload");
   assert.equal(harness.directoryReads("/profile/chrome/mods"), 1,
     "the cached overlapping directory should not be rescanned for the second root");
+});
+
+test("same-size atomic CSS replacements are detected while directory listings stay cached", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", true);
+  await harness.flushAsyncWork();
+  assert.equal(harness.directoryReads("/profile/chrome"), 1);
+
+  harness.replaceCssFile("/profile/chrome/active.css", ".active { color: blue; }");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.directoryReads("/profile/chrome"), 1,
+    "an unchanged directory listing should be reused");
+  assert.equal(harness.timeouts.size, 1,
+    "the per-file metadata check should detect the replacement without a directory rescan");
+  await harness.runDebouncedReload();
+  assert.equal(harness.sheetLoads(), 1,
+    "the changed imported stylesheet should be reloaded");
+});
+
+test("periodic directory revalidation discovers renamed CSS entries with unchanged directory metadata", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  await harness.flushAsyncWork();
+  assert.equal(harness.directoryReads("/profile/chrome"), 1);
+
+  harness.renameCssFile("/profile/chrome/active.css", "/profile/chrome/renamed.css");
+  harness.advanceTime(9_999);
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  assert.equal(harness.directoryReads("/profile/chrome"), 1,
+    "the cached listing should remain effective before the revalidation interval");
+  await harness.runDebouncedReload();
+
+  harness.advanceTime(1);
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  assert.equal(harness.directoryReads("/profile/chrome"), 2,
+    "the directory should be listed again after ten seconds even when its metadata is unchanged");
+  assert.equal(harness.timeouts.size, 1,
+    "the refreshed listing should discover the newly named CSS file");
 });
 
 test("a legacy single custom watch path remains supported", async () => {
