@@ -28,6 +28,9 @@ function createHarness() {
   let children = [...entryFiles];
   const extraRoots = new Map();
   const directoryReadCounts = new Map();
+  const statRequests = new Set();
+  const specialEntries = new Map();
+  let pathExpandingCycleRoot = null;
   let cssModified = 1;
   const cssFileStats = new Map(entryFiles.map((path) => [path, { lastModified: 1, size: 10 }]));
   const cssTexts = new Map([
@@ -49,6 +52,13 @@ function createHarness() {
 
   const io = {
     async stat(path) {
+      statRequests.add(path);
+      if (pathExpandingCycleRoot && (path === pathExpandingCycleRoot || path.startsWith(pathExpandingCycleRoot + "/"))) {
+        return { type: "directory", lastModified: 1, size: 1 };
+      }
+      if (specialEntries.has(path)) {
+        return { type: specialEntries.get(path), lastModified: 1, size: 10 };
+      }
       if (path === "/profile/chrome") {
         return { type: "directory", lastModified: 1, size: children.length };
       }
@@ -84,6 +94,9 @@ function createHarness() {
     },
     async getChildren(path) {
       directoryReadCounts.set(path, (directoryReadCounts.get(path) ?? 0) + 1);
+      if (pathExpandingCycleRoot && (path === pathExpandingCycleRoot || path.startsWith(pathExpandingCycleRoot + "/"))) {
+        return [path + "/loop"];
+      }
       return [...(path === "/profile/chrome" ? children : extraRoots.get(path) ?? [])];
     },
   };
@@ -257,6 +270,16 @@ function createHarness() {
     },
     sheetLoads: () => sheetLoads,
     directoryReads: (path) => directoryReadCounts.get(path) ?? 0,
+    directoryReadTotal: () => [...directoryReadCounts.values()].reduce((total, count) => total + count, 0),
+    wasStatRequested: (path) => statRequests.has(path),
+    addSpecialEntry(path, type) {
+      children.push(path);
+      specialEntries.set(path, type);
+    },
+    addPathExpandingSymlinkCycle(root) {
+      children.push(root);
+      pathExpandingCycleRoot = root;
+    },
     modifySineStyle() {
       sineStyleModified += 1;
     },
@@ -564,6 +587,58 @@ test("periodic directory revalidation discovers renamed CSS entries with unchang
     "the directory should be listed again after ten seconds even when its metadata is unchanged");
   assert.equal(harness.timeouts.size, 1,
     "the refreshed listing should discover the newly named CSS file");
+});
+
+test("Sine metadata cannot escape its mod directory through traversal paths", async () => {
+  const harness = createHarness();
+  harness.modifySineMetadata({
+    "../outside-mod": { enabled: true, style: { chrome: "theme.css" } },
+    "safe-mod": { enabled: true, style: { chrome: "../outside.css" } },
+  });
+  const win = harness.addWindow();
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-sine-mods", true);
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.wasStatRequested("/profile/chrome/sine-mods/../outside-mod/theme.css"), false,
+    "a mod ID containing traversal segments must be rejected");
+  assert.equal(harness.wasStatRequested("/profile/chrome/sine-mods/safe-mod/../outside.css"), false,
+    "a stylesheet path containing traversal segments must be rejected");
+});
+
+test("path-expanding symlink cycles remain bounded by the recursive scan depth limit", async () => {
+  const harness = createHarness();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-nested-directories", true);
+  harness.addPathExpandingSymlinkCycle("/profile/chrome/loop");
+  harness.addWindow();
+  await harness.flushAsyncWork();
+
+  assert.ok(harness.directoryReadTotal() <= 65,
+    "the root plus at most 64 nested directory levels should be scanned");
+});
+
+test("directory scans ignore non-CSS regular files and unexpected filesystem entry types", async () => {
+  const harness = createHarness();
+  harness.addSpecialEntry("/profile/chrome/unexpected.css", "symlink");
+  harness.addSpecialEntry("/profile/chrome/mod-script.js", "regular");
+  const win = harness.addWindow();
+  await harness.flushAsyncWork();
+
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  assert.equal(harness.timeouts.size, 0,
+    "non-CSS files and non-regular CSS entries must not trigger stylesheet reloads");
+});
+
+test("relative watch roots are rejected and fall back to the profile chrome directory", async () => {
+  const harness = createHarness();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-path", "../outside");
+  harness.addWindow();
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.wasStatRequested("../outside"), false,
+    "a relative watch root must never be passed to filesystem scanning");
+  assert.ok(harness.wasStatRequested("/profile/chrome"),
+    "an invalid custom path should fall back to the profile chrome directory");
 });
 
 test("a legacy single custom watch path remains supported", async () => {
