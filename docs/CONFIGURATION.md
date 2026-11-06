@@ -18,6 +18,15 @@ Sine builds the settings UI from `preferences.json`. Changes are stored in the Z
 | `hotkey` | `Ctrl+Shift+F5` | Manual reload shortcut. `CMD` and `SUPER` alias `META`; empty disables it. |
 | `debug-logging` | `false` | Enable local scan, reload, actor, and watcher diagnostics. Logs may include absolute paths. |
 
+## Security and filesystem scope
+
+- **Watch paths are user-selected, not sandboxed.** The setting accepts absolute file or directory paths anywhere the Zen process can read; it is not restricted to the profile. Use only paths you trust. Relative paths are rejected and invalid settings fall back to the profile's `chrome` directory.
+- **The watcher reads files; it does not edit them.** It enumerates directories, reads CSS to resolve local `@import` dependencies, reads Sine's `mods.json`, and checks file metadata. It does not write, delete, or directly execute watched files.
+- **Directory contents are filtered.** Directory scans track regular `.css` files only. Other regular files (including JavaScript files) and non-regular entry types are ignored. A custom single-file root is accepted when it is a regular file; stylesheet reload decisions still apply only to CSS dependencies.
+- **Symlinks and overlapping roots.** Overlapping roots and repeated path strings are de-duplicated during a scan. The scanner does not resolve every path to a canonical filesystem identity; symlink aliases may therefore refer to the same underlying directory under different paths. Recursive traversal has a 64-level depth limit to bound path-expanding cycles. Actual symlink and junction behavior can vary by platform and must be checked in the target Zen environment.
+- **Sine metadata path validation.** When reading enabled Sine mods, this mod rejects mod IDs containing path separators, colons, or NUL characters, and rejects stylesheet paths that are absolute, contain backslashes, or contain empty, `.`, or `..` segments. This protects the metadata-to-style path resolution; it does not restrict the user-selected watch roots.
+- **Sine script execution is delegated.** This mod does not load or execute Sine mod JavaScript itself. It calls Sine's `manager.rebuildMods(false, true)` to rebuild Sine-managed styles. Sine and each enabled mod remain responsible for their own privileged script behavior; the repository's installation requirements include Sine's `sine.allow-unsafe-js` preference. Review enabled mod code and Sine's own security guidance separately.
+
 ## Matugen
 
 Write generated styles into the profile's `chrome` directory and import them from the relevant entrypoint:
