@@ -791,6 +791,27 @@ test("settings import applies only included known preferences after validation",
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-content"), false);
 });
 
+test("invalid numeric settings are rejected without partially applying an import", async () => {
+  const harness = createHarness();
+  const path = "/tmp/invalid-numeric-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 1,
+    preferences: { "poll-interval-ms": "not-a-number", "reload-chrome": true },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
+});
+
 test("unsupported settings schema is rejected without changing preferences", async () => {
   const harness = createHarness();
   const path = "/tmp/invalid-settings.json";

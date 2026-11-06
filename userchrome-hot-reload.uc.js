@@ -1380,7 +1380,7 @@
           throw new Error("Invalid string setting: " + key);
         }
         if ((key === "poll-interval-ms" || key === "reload-debounce-ms") &&
-            value !== "" && !/^\\d+$/.test(value)) {
+            value !== "" && !/^\d+$/.test(value)) {
           throw new Error("Invalid numeric setting: " + key);
         }
         if (key === "watch-path" && value.trim()) {
@@ -1389,9 +1389,9 @@
             try { roots = JSON.parse(value); } catch (e) { throw new Error("Invalid watch-path JSON array"); }
           }
           const absolute = (path) => typeof path === "string" && (
-            path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path) || path.startsWith("\\\\")
+            path.trim().startsWith("/") || /^[A-Za-z]:[\\/]/.test(path.trim()) || path.trim().startsWith("\\\\")
           );
-          if (!Array.isArray(roots) || roots.length === 0 || !roots.every((path) => absolute(path.trim?.() ?? path))) {
+          if (!Array.isArray(roots) || roots.length === 0 || !roots.every(absolute)) {
             throw new Error("Watch paths must be absolute paths");
           }
         }
