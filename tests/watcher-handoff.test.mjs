@@ -348,6 +348,7 @@ function createHarness() {
     setImportConfirmation(value) { confirmImport = value; },
     failNextPreferenceWrite(name) { failNextPreferenceWriteFor = name; },
     getPreference(name) { return prefValues.get(name); },
+    hasMenuItem(id) { return menuItems.has(id); },
     triggerMenuItem(id) {
       const item = menuItems.get(id);
       assert.ok(item, "expected app-menu item");
@@ -895,6 +896,21 @@ test("settings import rolls back earlier preference writes if a later write fail
 
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
+});
+
+test("settings app-menu actions are removed when the owning window closes", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), true);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), true);
+
+  harness.closeWindow(win);
+
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), false);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), false);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), false);
 });
 
 test("unsupported settings schema is rejected without changing preferences", async () => {
