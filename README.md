@@ -63,3 +63,8 @@ The [manual QA checklist](docs/TESTING.md) documents browser-level tests that re
 ## License
 
 [MPL-2.0](LICENSE)
+
+
+## Settings backup
+
+Use **Export hot-reload settings…** and **Import hot-reload settings…** in Zen's app menu to back up or restore this mod's preferences. The versioned JSON import updates only settings included in the file; unsupported schemas and invalid values are rejected. See [configuration](docs/CONFIGURATION.md#settings-backup-and-restore) for validation and local-path privacy details.
