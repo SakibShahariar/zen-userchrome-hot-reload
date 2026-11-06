@@ -29,6 +29,34 @@ Record Pass, Fail, or Not tested for each item. A row is considered verified onl
 | App-menu actions | Verify manual reload, settings export/import, native file-picker flows, cancellation, and confirmation. |
 | Disable/uninstall | Disable or remove the mod; confirm timers, observers, menu items, and window references are cleaned up. |
 
+## Per-environment evidence template
+
+Duplicate this block for every Zen/OS/Sine combination tested. Do not leave a check blank; use **Not tested** when evidence is unavailable.
+
+```markdown
+### Environment: [Zen version/build/channel] on [OS/version/architecture]
+
+- Sine version:
+- Tested commit SHA:
+- Test date:
+- Overall result: Not tested
+
+| Required check | Result (Pass / Fail / Not tested) | Evidence / notes |
+|---|---|---|
+| Install and activation | Not tested | |
+| Preference handling | Not tested | |
+| Window lifecycle | Not tested | |
+| CSS detection and atomic replacement | Not tested | |
+| Chrome stylesheet reload | Not tested | |
+| Content stylesheet reload | Not tested | |
+| Nested/custom roots and exclusions | Not tested | |
+| Sine style rebuild | Not tested | |
+| App menu and file picker | Not tested | |
+| Disable/uninstall cleanup | Not tested | |
+```
+
+Only change the overall result to **Pass** when every required check passes for that exact environment and commit. A failure in one environment does not establish failure in every other environment; record each combination separately.
+
 ## Evidence format
 
 For each tested environment, add a row to the matrix with:
