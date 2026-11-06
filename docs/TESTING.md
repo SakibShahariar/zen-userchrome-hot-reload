@@ -53,3 +53,8 @@ Run these checks in Zen Browser before a release or after changes to the watcher
 - [ ] Confirm export/import actions are removed when the owning browser window closes.
 
 - [ ] Simulate a preference write failure during import and confirm all earlier preference writes are rolled back.
+
+
+## Recording live compatibility evidence
+
+After completing the manual checks in a real Zen + Sine environment, update [COMPATIBILITY.md](COMPATIBILITY.md) with the exact Zen build, OS/architecture, Sine version, tested commit SHA, date, and Pass/Fail result for each required check. Do not mark an environment supported from CI results alone.
