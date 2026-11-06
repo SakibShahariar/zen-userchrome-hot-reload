@@ -35,6 +35,7 @@ function createHarness() {
   let filePickerPath = "/tmp/zen-userchrome-hot-reload-settings.json";
   let filePickerResult = 0;
   let confirmImport = true;
+  let failNextPreferenceWriteFor = null;
   const specialEntries = new Map();
   let pathExpandingCycleRoot = null;
   let cssModified = 1;
@@ -158,10 +159,18 @@ function createHarness() {
         getStringPref: (name) => prefValues.get(name),
         getIntPref: (name) => prefValues.get(name),
         setBoolPref(name, value) {
+          if (failNextPreferenceWriteFor === name) {
+            failNextPreferenceWriteFor = null;
+            throw new Error("Simulated preference write failure");
+          }
           prefValues.set(name, value);
           for (const observer of prefObservers.get(name) ?? []) observer.observe();
         },
         setStringPref(name, value) {
+          if (failNextPreferenceWriteFor === name) {
+            failNextPreferenceWriteFor = null;
+            throw new Error("Simulated preference write failure");
+          }
           prefValues.set(name, value);
           for (const observer of prefObservers.get(name) ?? []) observer.observe();
         },
@@ -337,6 +346,7 @@ function createHarness() {
     setImportedSettings(path, payload) { fileStore.set(path, structuredClone(payload)); },
     exportedSettings(path = filePickerPath) { return structuredClone(fileStore.get(path)); },
     setImportConfirmation(value) { confirmImport = value; },
+    failNextPreferenceWrite(name) { failNextPreferenceWriteFor = name; },
     getPreference(name) { return prefValues.get(name); },
     triggerMenuItem(id) {
       const item = menuItems.get(id);
@@ -863,6 +873,28 @@ test("invalid watch-path arrays reject the entire settings import before applyin
   await harness.flushAsyncWork();
 
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+});
+
+test("settings import rolls back earlier preference writes if a later write fails", async () => {
+  const harness = createHarness();
+  const path = "/tmp/rollback-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 1,
+    preferences: { "poll-interval-ms": "900", "reload-chrome": true },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
+  harness.failNextPreferenceWrite("extensions.zen-userchrome-hot-reload.reload-chrome");
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
 });
 
 test("unsupported settings schema is rejected without changing preferences", async () => {

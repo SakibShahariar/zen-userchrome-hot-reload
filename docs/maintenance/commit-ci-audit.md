@@ -24,11 +24,11 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/zen-userchrome-hot-reload`
 - Default branch: `main`
-- Last fully reviewed checkpoint: `5ca3087526078cbd24a1bcd5082885a906534f2f`
+- Last fully reviewed checkpoint: `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033`
 - Review date: 2026-11-06
-- Reviewed 14 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
+- Reviewed 15 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
 - Combined status endpoint returned empty status lists; authoritative workflow runs were checked directly by exact commit SHA.
-- The next commit after this checkpoint is the current test/ledger commit; its own CI must be checked before advancing the checkpoint again.
+- Commit `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033` was checked directly: workflow run [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691) completed successfully, including automated tests. The next commit after this checkpoint is the current test/ledger commit; its own CI must be checked before advancing the checkpoint again.
 
 ## Verified commit results
 
@@ -54,6 +54,8 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `bdbd417fcdcbc37dc4e734858c47cb26585d78bb` | fix: keep settings actions in module scope (#50) | red | [42153196440](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153196440) | automated tests failed |
 | `5ca3087526078cbd24a1bcd5082885a906534f2f` | fix: validate imported setting values strictly (#50) | green | [42153273243](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153273243) | automated tests included |
 
+| `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033` | test: cover settings import cancellation and validation (#50) | green | [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691) | automated tests included |
+
 ## Red-cross investigation log
 
 ### 2026-11-06 — settings import/export work (#50)
@@ -77,4 +79,4 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | Date | Reviewed range / checkpoint | Result summary |
 |---|---|---|
 | 2026-11-02 | Initial checkpoint `312c162504603e6de79417f937d3f7639a586ef0` | Combined status lookup returned no entries; later direct workflow lookup established the actual results. |
-| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 19 commits checked: 17 green, 2 red. Both failures were diagnosed and corrected by a later green commit. |
+| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 20 commits checked: 18 green, 2 red. Both failures were diagnosed and corrected by a later green commit. |

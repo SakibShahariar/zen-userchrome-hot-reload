@@ -51,3 +51,5 @@ Run these checks in Zen Browser before a release or after changes to the watcher
 - [ ] Try an unsupported schema version, wrong preference type, malformed watch-path array, and invalid numeric value; confirm no settings are partially changed.
 - [ ] Cancel the file picker and decline the import confirmation; confirm settings remain unchanged.
 - [ ] Confirm export/import actions are removed when the owning browser window closes.
+
+- [ ] Simulate a preference write failure during import and confirm all earlier preference writes are rolled back.
