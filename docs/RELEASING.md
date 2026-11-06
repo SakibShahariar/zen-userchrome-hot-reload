@@ -19,7 +19,7 @@ Do not create a release tag until all of the following are true:
 4. The `Draft Release` workflow builds an installable ZIP, verifies its contents, calculates SHA-256, and creates a **draft** GitHub Release.
 5. Review the draft, attached ZIP, checksum file, and GitHub-generated source archives. Publish the draft manually only after final review.
 
-The normal Validate workflow also builds a disposable `v0.0.0` archive on every push, so packaging regressions are caught before a release tag is created.
+The normal Validate workflow builds a disposable `v0.0.0` archive, exercises the actual `v0.1.0` changelog/tag path, and rejects malformed tags on every push. Packaging regressions are therefore caught before a release tag is created.
 
 ## Distribution contents
 

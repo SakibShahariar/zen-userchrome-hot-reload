@@ -32,6 +32,8 @@ jobs:
         run: python -m json.tool theme.json > /dev/null
       - name: Validate distributable release archive
         run: python3 scripts/package_release.py v0.0.0 --check
+      - name: Validate initial release tag and changelog section
+        run: python3 scripts/package_release.py v0.1.0
       - name: Reject malformed release tags
         run: |
           if python3 scripts/package_release.py invalid --check > /dev/null 2>&1; then

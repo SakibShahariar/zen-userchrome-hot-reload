@@ -24,11 +24,11 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 - Repository: `SakibShahariar/zen-userchrome-hot-reload`
 - Default branch: `main`
-- Last fully reviewed checkpoint: `a99d59a66de9942a9285af7d2e4f2b8abe0f2149`
+- Last fully reviewed checkpoint: `181a35786963dcae6b93e05800b31c55c702c535`
 - Review date: 2026-11-06
-- Reviewed 20 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
+- Reviewed 22 commits after the previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0`, plus four older owner-identified commits that needed explicit verification.
 - Combined status endpoint returned empty status lists; authoritative workflow runs were checked directly by exact commit SHA.
-- Commits `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033`, `aad7a9f9c08826459a7d21f1d8ed686d47048411`, and `e44c6b22fa33a8dc9517b688d4e0260e93008565` were checked directly: workflow runs [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691), [42153519557](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153519557), and [42153645328](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153645328) completed successfully, including automated tests. Commit `2af6f267ad8b93ddedb115843f68c2e6f0919515` was checked directly: workflow run [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) completed successfully, including automated tests. Commits `2af6f267ad8b93ddedb115843f68c2e6f0919515` and `a99d59a66de9942a9285af7d2e4f2b8abe0f2149` were checked directly: workflow runs [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) and [42153965391](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153965391) completed successfully, including package validation. The next commit after this checkpoint is the current package-integrity test commit; its own CI must be checked before advancing the checkpoint again.
+- Commits `0c0ef2e3b5a977ec54d3eb6891f6127ad1dab033`, `aad7a9f9c08826459a7d21f1d8ed686d47048411`, and `e44c6b22fa33a8dc9517b688d4e0260e93008565` were checked directly: workflow runs [42153436691](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153436691), [42153519557](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153519557), and [42153645328](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153645328) completed successfully, including automated tests. Commit `2af6f267ad8b93ddedb115843f68c2e6f0919515` was checked directly: workflow run [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) completed successfully, including automated tests. Commits `2af6f267ad8b93ddedb115843f68c2e6f0919515` and `a99d59a66de9942a9285af7d2e4f2b8abe0f2149` were checked directly: workflow runs [42153726484](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153726484) and [42153965391](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153965391) completed successfully, including package validation. Commits `da2a7f85af2ced2fe71a5111d2e7ac40d717d6b5` and `181a35786963dcae6b93e05800b31c55c702c535` were checked directly: workflow runs [42154126200](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154126200) and [42154170420](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154170420) completed successfully, including package validation. The next commit after this checkpoint is the current release-tag validation commit; its own CI must be checked before advancing the checkpoint again.
 
 ## Verified commit results
 
@@ -65,6 +65,9 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | `b6e6439cbbd2d3ff153fa860423a0ecdc8631f10` | build: prepare verified release artifacts (#55) | red | [42153937503](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153937503) | package step rejected valid v0.0.0 due to over-escaped semantic-version regex |
 | `a99d59a66de9942a9285af7d2e4f2b8abe0f2149` | fix: validate release tag patterns correctly (#55) | green | [42153965391](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42153965391) | automated tests and package archive validation included |
 
+| `da2a7f85af2ced2fe71a5111d2e7ac40d717d6b5` | test: verify release archive contents and tag validation (#55) | green | [42154126200](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154126200) | automated tests, archive contents, checksum, and malformed tag checks included |
+| `181a35786963dcae6b93e05800b31c55c702c535` | fix: write standard checksum line endings (#55) | green | [42154170420](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154170420) | automated tests and package validation included |
+
 ## Red-cross investigation log
 
 ### 2026-11-06 — settings import/export work (#50)
@@ -94,4 +97,4 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 | Date | Reviewed range / checkpoint | Result summary |
 |---|---|---|
 | 2026-11-02 | Initial checkpoint `312c162504603e6de79417f937d3f7639a586ef0` | Combined status lookup returned no entries; later direct workflow lookup established the actual results. |
-| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 25 commits checked: 22 green, 3 red. Both failures were diagnosed and corrected by a later green commit. |
+| 2026-11-06 | Previous checkpoint `312c162504603e6de79417f937d3f7639a586ef0` through `5ca3087526078cbd24a1bcd5082885a906534f2f`, plus four older owner-identified commits | 27 commits checked: 24 green, 3 red. Both failures were diagnosed and corrected by a later green commit. |
