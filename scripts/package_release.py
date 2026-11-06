@@ -34,12 +34,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if not re.fullmatch(r"v[0-9]+\\.[0-9]+\\.[0-9]+", args.tag):
+    if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", args.tag):
         parser.error("tag must use vMAJOR.MINOR.PATCH format")
 
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     if not args.check and not re.search(
-        rf"^## \[{re.escape(args.tag)}\\]$", changelog, re.MULTILINE
+        rf"^## \[{re.escape(args.tag)}\]$", changelog, re.MULTILINE
     ):
         parser.error(f"CHANGELOG.md has no section for {args.tag}")
 
@@ -61,7 +61,7 @@ def main() -> int:
 
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     (dist / "SHA256SUMS").write_text(
-        f"{digest}  {archive.name}\\n", encoding="utf-8"
+        f"{digest}  {archive.name}\n", encoding="utf-8"
     )
     print(f"Created {archive.relative_to(ROOT)}")
     print(f"SHA-256 {digest}")
