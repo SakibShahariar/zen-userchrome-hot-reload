@@ -63,7 +63,7 @@ def main() -> int:
 
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     checksum_file = dist / "SHA256SUMS"
-    expected_checksum = f"{digest}  {archive.name}\\n"
+    expected_checksum = f"{digest}  {archive.name}\n"
     checksum_file.write_text(expected_checksum, encoding="utf-8")
     if checksum_file.read_text(encoding="utf-8") != expected_checksum:
         raise RuntimeError("checksum file verification failed")
