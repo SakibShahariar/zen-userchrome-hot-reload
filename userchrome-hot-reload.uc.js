@@ -1345,7 +1345,6 @@
     notifyReloadStatusChange();
   }
 
-  function setupReloadMenuItem() {
   function createSettingsExportPayload() {
     const preferences = {};
     for (const definition of SETTINGS_DEFINITIONS) {
