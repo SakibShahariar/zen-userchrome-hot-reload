@@ -812,6 +812,59 @@ test("invalid numeric settings are rejected without partially applying an import
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
 });
 
+test("cancelled settings file selection leaves settings and exports untouched", async () => {
+  const harness = createHarness();
+  harness.configureFilePicker({ result: 1 });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.exportedSettings(), undefined);
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+});
+
+test("declining settings import confirmation leaves preferences unchanged", async () => {
+  const harness = createHarness();
+  const path = "/tmp/declined-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 1,
+    preferences: { "poll-interval-ms": "900" },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.setImportConfirmation(false);
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+});
+
+test("invalid watch-path arrays reject the entire settings import before applying other keys", async () => {
+  const harness = createHarness();
+  const path = "/tmp/invalid-watch-path-settings.json";
+  harness.setImportedSettings(path, {
+    format: "zen-userchrome-hot-reload-settings",
+    schemaVersion: 1,
+    preferences: { "poll-interval-ms": "900", "watch-path": "[null]" },
+  });
+  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
+  harness.configureFilePicker({ path });
+  harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
+});
+
 test("unsupported settings schema is rejected without changing preferences", async () => {
   const harness = createHarness();
   const path = "/tmp/invalid-settings.json";
