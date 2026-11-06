@@ -29,6 +29,7 @@ function createHarness() {
   const extraRoots = new Map();
   const directoryReadCounts = new Map();
   const statRequests = new Set();
+  const fileStatCounts = new Map();
   const specialEntries = new Map();
   let pathExpandingCycleRoot = null;
   let cssModified = 1;
@@ -53,6 +54,7 @@ function createHarness() {
   const io = {
     async stat(path) {
       statRequests.add(path);
+      if (cssFileStats.has(path)) fileStatCounts.set(path, (fileStatCounts.get(path) ?? 0) + 1);
       if (pathExpandingCycleRoot && (path === pathExpandingCycleRoot || path.startsWith(pathExpandingCycleRoot + "/"))) {
         return { type: "directory", lastModified: 1, size: 1 };
       }
@@ -272,6 +274,7 @@ function createHarness() {
     directoryReads: (path) => directoryReadCounts.get(path) ?? 0,
     directoryReadTotal: () => [...directoryReadCounts.values()].reduce((total, count) => total + count, 0),
     wasStatRequested: (path) => statRequests.has(path),
+    fileStatCount: (path) => fileStatCounts.get(path) ?? 0,
     addSpecialEntry(path, type) {
       children.push(path);
       specialEntries.set(path, type);
@@ -639,6 +642,44 @@ test("relative watch roots are rejected and fall back to the profile chrome dire
     "a relative watch root must never be passed to filesystem scanning");
   assert.ok(harness.wasStatRequested("/profile/chrome"),
     "an invalid custom path should fall back to the profile chrome directory");
+});
+
+test("large nested CSS trees reuse directory listings while refreshing file metadata", async () => {
+  const harness = createHarness();
+  const directories = Array.from({ length: 10 }, (_, index) =>
+    `/profile/chrome/generated-${index}`
+  );
+  const filesByDirectory = directories.map((directory, index) =>
+    Array.from({ length: 50 }, (_, fileIndex) =>
+      `${directory}/theme-${index}-${fileIndex}.css`
+    )
+  );
+  directories.forEach((directory, index) => harness.setExtraRoot(directory, filesByDirectory[index]));
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-nested-directories", true);
+  const win = harness.addWindow();
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.directoryReads("/profile/chrome"), 1);
+  for (const directory of directories) {
+    assert.equal(harness.directoryReads(directory), 1,
+      "each nested directory should be listed once during the initial scan");
+  }
+
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.directoryReads("/profile/chrome"), 1,
+    "the root listing should be reused on the next poll");
+  for (const directory of directories) {
+    assert.equal(harness.directoryReads(directory), 1,
+      "nested directory listings should remain cached on the next poll");
+  }
+  assert.equal(harness.fileStatCount(filesByDirectory[0][0]), 2,
+    "CSS file metadata should still be refreshed on each poll");
+  assert.equal(harness.fileStatCount(filesByDirectory[9][49]), 2,
+    "the cache should behave consistently across the full 500-file fixture");
+  assert.equal(harness.timeouts.size, 0,
+    "an unchanged large tree should not trigger reloads");
 });
 
 test("a legacy single custom watch path remains supported", async () => {
