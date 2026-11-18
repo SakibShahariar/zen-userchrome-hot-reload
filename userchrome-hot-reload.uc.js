@@ -675,6 +675,10 @@
         if (directory === root) {
           failedRoots?.add(root);
           reportWatchRootError(directory, e);
+        } else {
+          // Deep symlink paths can hit the platform's symlink-resolution limit
+          // before the depth guard is reached; report the skipped path too.
+          warnSkippedDirectory(directory, `could not stat directory: ${e}`);
         }
         return;
       }

@@ -57,11 +57,14 @@ function createHarness() {
   };
   const rebuildCalls = [];
   const registeredActors = [];
+  const warnings = [];
+  const failingStats = new Set();
   let mostRecentWindowOverride = null;
 
   const io = {
     async stat(path) {
       statRequests.add(path);
+      if (failingStats.has(path)) throw new Error("Simulated stat failure");
       if (cssFileStats.has(path)) fileStatCounts.set(path, (fileStatCounts.get(path) ?? 0) + 1);
       if (pathExpandingCycleRoot && (path === pathExpandingCycleRoot || path.startsWith(pathExpandingCycleRoot + "/"))) {
         return { type: "directory", lastModified: 1, size: 1 };
@@ -264,7 +267,12 @@ function createHarness() {
       clearTimeout(id) {
         timeouts.delete(id);
       },
-      console: { debug() {}, info() {}, warn() {}, error() {} },
+      console: {
+        debug() {},
+        info() {},
+        warn(...args) { warnings.push(args); },
+        error() {},
+      },
       Date: class TestDate extends Date {
         static now() { return currentTime; }
       },
@@ -398,6 +406,8 @@ function createHarness() {
     },
     rebuildCalls,
     registeredActors,
+    warnings,
+    failStatFor(path) { failingStats.add(path); },
     setMostRecentWindow(win) { mostRecentWindowOverride = win; },
     async runDebouncedReload() {
       const pending = [...timeouts.values()];
@@ -772,6 +782,27 @@ test("path-expanding symlink cycles remain bounded by the recursive scan depth l
 
   assert.ok(harness.directoryReadTotal() <= 65,
     "the root plus at most 64 nested directory levels should be scanned");
+});
+
+test("a nested directory that becomes unreadable is skipped with a warning", async () => {
+  const harness = createHarness();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-nested-directories", true);
+  harness.addSpecialEntry("/profile/chrome/broken", "directory");
+  const win = harness.addWindow();
+  await harness.flushAsyncWork();
+
+  // The first scan caches the directory entry. On a later scan, stat() of the
+  // directory itself fails (as with a deep symlink hitting ELOOP) while the
+  // cached entry still references it.
+  harness.failStatFor("/profile/chrome/broken");
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+
+  assert.ok(
+    harness.warnings.some(([message, path]) =>
+      String(message).includes("Skipping recursive CSS directory") && String(path).includes("broken")),
+    "the skipped directory path must be reported in the Browser Console: " + JSON.stringify(harness.warnings)
+  );
 });
 
 test("directory scans ignore non-CSS regular files and unexpected filesystem entry types", async () => {
