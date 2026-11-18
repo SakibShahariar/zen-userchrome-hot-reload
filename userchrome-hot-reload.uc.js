@@ -726,7 +726,10 @@
                   size: info.size,
                 };
               } catch (e) {
-                // A child may disappear during a directory scan.
+                // Deep symlink chains can fail stat() with ELOOP while the
+                // directory listing is being built, before recursion. Report
+                // that path instead of dropping it silently.
+                warnSkippedDirectory(child, `could not stat directory entry: ${e}`);
                 return null;
               }
             })

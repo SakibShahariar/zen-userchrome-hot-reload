@@ -784,6 +784,21 @@ test("path-expanding symlink cycles remain bounded by the recursive scan depth l
     "the root plus at most 64 nested directory levels should be scanned");
 });
 
+test("a directory entry that cannot be stat'd while listing is reported", async () => {
+  const harness = createHarness();
+  harness.setPref("extensions.zen-userchrome-hot-reload.watch-nested-directories", true);
+  harness.addSpecialEntry("/profile/chrome/broken", "directory");
+  harness.failStatFor("/profile/chrome/broken");
+  harness.addWindow();
+  await harness.flushAsyncWork();
+
+  assert.ok(
+    harness.warnings.some(([message, path]) =>
+      String(message).includes("Skipping recursive CSS directory") && String(path).includes("broken")),
+    "a failed stat on a directory entry must name the skipped path: " + JSON.stringify(harness.warnings)
+  );
+});
+
 test("a nested directory that becomes unreadable is skipped with a warning", async () => {
   const harness = createHarness();
   harness.setPref("extensions.zen-userchrome-hot-reload.watch-nested-directories", true);
