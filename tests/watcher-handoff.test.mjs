@@ -56,6 +56,7 @@ function createHarness() {
     },
   };
   const rebuildCalls = [];
+  const registeredActors = [];
 
   const io = {
     async stat(path) {
@@ -224,7 +225,11 @@ function createHarness() {
         filename: (path) => path.split("/").at(-1),
         toFileURI: (path) => "file://" + path,
       },
-      ChromeUtils: { registerWindowActor() {} },
+      ChromeUtils: {
+        registerWindowActor(name, options) {
+          registeredActors.push({ name, options });
+        },
+      },
       Ci: {
         nsIFileURL: {},
         nsIFilePicker: { modeOpen: 0, modeSave: 1, returnOK: 0, returnCancel: 1, returnReplace: 2 },
@@ -379,7 +384,19 @@ function createHarness() {
         },
       };
     },
+    setSineApiManager(win) {
+      // Current Sine deletes window.manager and exposes it as SineAPI.manager.
+      win.SineAPI = {
+        manager: {
+          async rebuildMods(...args) {
+            rebuildCalls.push(args);
+            return true;
+          },
+        },
+      };
+    },
     rebuildCalls,
+    registeredActors,
     async runDebouncedReload() {
       const pending = [...timeouts.values()];
       assert.ok(pending.length > 0, "expected a pending debounced reload");
@@ -500,6 +517,33 @@ test("Sine metadata changes trigger a rebuild and refresh the tracked style path
   await harness.runDebouncedReload();
   assert.deepEqual(harness.rebuildCalls, [[false, true]],
     "changing Sine's mod metadata should rebuild its generated styles");
+});
+
+test("Sine rebuild uses the manager relocated to SineAPI", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow();
+  harness.setSineApiManager(win);
+  harness.setPref("extensions.zen-userchrome-hot-reload.reload-sine-mods", true);
+  await harness.flushAsyncWork();
+
+  harness.modifySineStyle();
+  harness.runPollFor(win);
+  await harness.flushAsyncWork();
+  await harness.runDebouncedReload();
+  assert.deepEqual(harness.rebuildCalls, [[false, true]],
+    "Sine's relocated manager should still rebuild tracked styles");
+});
+
+test("content actor registers for web remote types", async () => {
+  const harness = createHarness();
+  harness.addWindow();
+  await harness.flushAsyncWork();
+
+  const registration = harness.registeredActors.find(({ name }) => name === "UserChromeHotReload");
+  assert.ok(registration, "expected the content actor to be registered");
+  assert.deepEqual(Array.from(registration.options.remoteTypes), ["web"]);
+  assert.equal(registration.options.matchesTarget, undefined,
+    "the obsolete matchesTarget option must not be used");
 });
 
 

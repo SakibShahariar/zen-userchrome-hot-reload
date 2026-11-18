@@ -1099,7 +1099,9 @@
     }
     try {
       const win = Services.wm.getMostRecentWindow("navigator:browser");
-      const manager = win?.manager;
+      // Sine moves the manager from window.manager to window.SineAPI.manager
+      // during startup; keep the legacy lookup for older Sine versions.
+      const manager = win?.SineAPI?.manager ?? win?.manager;
       if (typeof manager?.rebuildMods !== "function") {
         console.info(
           "[UserChrome Hot-Reload] Sine integration unavailable; CSS reload remains active, but Sine-managed mods will not be rebuilt. Install or enable Sine, then restart Zen."
@@ -1560,7 +1562,7 @@
           events: {},
         },
         allFrames: true,
-        matchesTarget: ["content"],
+        remoteTypes: ["web"],
         includeChrome: false,
         messageManagerGroups: ["browsers"],
       });
