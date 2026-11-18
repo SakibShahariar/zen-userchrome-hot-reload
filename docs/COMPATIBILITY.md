@@ -8,8 +8,8 @@ Do not claim a Zen version or operating system as supported until a real browser
 
 ## Current automated CI baseline
 
-- Commit: `eec1de48b65bbf673327b21e17f6ae27073e61cd`
-- Validate workflow: [run 42154954019](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/42154954019) — passed.
+- Commit: `13118d55239d0e4df220b4201528d721111c47e1`
+- Validate workflow: [run 44362795069](https://github.com/SakibShahariar/zen-userchrome-hot-reload/actions/runs/44362795069) — passed.
 - Covered: JavaScript syntax, automated Node tests, preferences/theme JSON, installable archive integrity, initial changelog/tag validation, and malformed-tag rejection.
 - This is source-level CI evidence only. It does not establish compatibility with any Zen build, Sine version, OS, or live desktop session. Update this baseline after future maintenance commits.
 
@@ -18,6 +18,20 @@ Do not claim a Zen version or operating system as supported until a real browser
 | Zen version / build / channel | OS version / architecture | Sine version | Test date | Tested commit | Result |
 |---|---|---|---|---|---|
 | Not yet tested | Not yet tested | Not yet tested | — | — | Not verified |
+
+## Partial live validation (not a support claim)
+
+The following checks were exercised manually on Zen 1.24.2b (build `20261111122308`), Fedora Linux 45 x86_64 (Wayland), at commit `13118d55239d0e4df220b4201528d721111c47e1`:
+
+- **Install and activation:** passed; no mod-related console errors.
+- **CSS detection and atomic replacement:** passed; same-size atomic rename, file add, and file removal were all detected.
+- **Chrome stylesheet reload:** passed.
+- **Content stylesheet reload:** passed in eligible documents; privileged documents such as `about:config` are excluded by design.
+- **Sine style rebuild:** passed; styles rebuilt without reloading mod JavaScript.
+- **Window lifecycle:** passed with two windows open; ownership handoff and focused-window recovery kept one watcher running.
+- **Symlink boundary:** a real symlink loop stayed bounded and the skipped path was reported in the Browser Console.
+
+Preference-handling details, native file-picker settings import/export, disable/uninstall cleanup, and other Zen/OS/Sine combinations remain **Not tested**. No environment row is marked verified until every required check passes.
 
 ## Required checks for each environment
 
