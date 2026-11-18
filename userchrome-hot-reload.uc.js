@@ -1,10 +1,6 @@
 (function () {
   "use strict";
 
-  const mostRecentWindow =
-    typeof Services !== "undefined" && typeof Services.wm?.getMostRecentWindow === "function"
-      ? Services.wm.getMostRecentWindow("navigator:browser")
-      : null;
   if (window.__userChromeHotReloadInitialized) {
     return;
   }
@@ -1823,105 +1819,69 @@
     },
   };
 
-  const enabledPrefObserver = {
-    observe() {
-      notifyReloadStatusChange();
-      if (!getPref("bool", PREF_ENABLED, true) || getPref("bool", PREF_PAUSED, false)) {
-        // Pausing or disabling removes the key listener and stops polling.
-        setupHotkey();
-        const state = yieldWatcher();
-        if (state && getPref("bool", PREF_PAUSED, false)) {
-          window.__userChromeHotReloadPausedState = state;
-        }
-        return;
-      }
+  function isMostRecentBrowserWindow() {
+    return typeof Services !== "undefined" &&
+      typeof Services.wm?.getMostRecentWindow === "function" &&
+      Services.wm.getMostRecentWindow("navigator:browser") === window;
+  }
 
-      setupHotkey();
-      if (typeof Services.wm?.getMostRecentWindow !== "function" || Services.wm.getMostRecentWindow("navigator:browser") !== window) {
-        return;
+  // Ownership must be decided from the live window state: a newly opened
+  // window is not necessarily the most recent one while its script loads, so
+  // a one-time check at startup can leave every window without a poller.
+  function ensureWatcherOwnership() {
+    notifyReloadStatusChange();
+    setupHotkey();
+    const enabled = getPref("bool", PREF_ENABLED, true);
+    const paused = getPref("bool", PREF_PAUSED, false);
+    if (!enabled || paused) {
+      const state = yieldWatcher();
+      if (state && paused) {
+        window.__userChromeHotReloadPausedState = state;
       }
+      return;
+    }
+    if (!isMostRecentBrowserWindow()) {
+      return;
+    }
 
-      let inheritedState = window.__userChromeHotReloadPausedState || null;
-      delete window.__userChromeHotReloadPausedState;
-      for (const otherWindow of chromeWindows()) {
-        if (otherWindow === window || otherWindow.closed) {
-          continue;
-        }
-        const pausedState = otherWindow.__userChromeHotReloadPausedState;
-        if (pausedState) {
-          if (!inheritedState) {
-            inheritedState = pausedState;
-          }
-          delete otherWindow.__userChromeHotReloadPausedState;
-          continue;
-        }
-        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
-          continue;
-        }
-        const state = otherWindow.__userChromeHotReloadYieldWatcher();
-        if (!inheritedState && state) {
-          inheritedState = state;
-        }
+    let inheritedState = window.__userChromeHotReloadPausedState || null;
+    delete window.__userChromeHotReloadPausedState;
+    for (const otherWindow of chromeWindows()) {
+      if (otherWindow === window || otherWindow.closed) {
+        continue;
       }
+      const pausedState = otherWindow.__userChromeHotReloadPausedState;
+      if (pausedState) {
+        if (!inheritedState) {
+          inheritedState = pausedState;
+        }
+        delete otherWindow.__userChromeHotReloadPausedState;
+        continue;
+      }
+      if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
+        continue;
+      }
+      const state = otherWindow.__userChromeHotReloadYieldWatcher();
+      if (!inheritedState && state) {
+        inheritedState = state;
+      }
+    }
 
-      if (inheritedState) {
-        startWatcher(
-          inheritedState.lastModifiedTimes,
-          inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff,
-          inheritedState.pendingChangedFiles
-        );
-      } else {
-        startWatcher();
-      }
-    },
-  };
+    if (inheritedState) {
+      startWatcher(
+        inheritedState.lastModifiedTimes,
+        inheritedState.initialScanComplete,
+        inheritedState.forceReloadOnHandoff,
+        inheritedState.pendingChangedFiles
+      );
+    } else {
+      startWatcher();
+    }
+    debugLog("Watcher ownership established", { restoredState: Boolean(inheritedState) });
+  }
 
-  const pausePrefObserver = {
-    observe() {
-      notifyReloadStatusChange();
-      setupHotkey();
-      const paused = getPref("bool", PREF_PAUSED, false);
-      const enabled = getPref("bool", PREF_ENABLED, true);
-      if (paused || !enabled) {
-        const state = yieldWatcher();
-        if (state && paused) {
-          window.__userChromeHotReloadPausedState = state;
-        }
-        return;
-      }
-      if (typeof Services.wm?.getMostRecentWindow !== "function" || Services.wm.getMostRecentWindow("navigator:browser") !== window) {
-        return;
-      }
-
-      let inheritedState = window.__userChromeHotReloadPausedState || null;
-      delete window.__userChromeHotReloadPausedState;
-      for (const otherWindow of chromeWindows()) {
-        if (otherWindow === window || otherWindow.closed) {
-          continue;
-        }
-        const state = otherWindow.__userChromeHotReloadPausedState;
-        if (state) {
-          if (!inheritedState) {
-            inheritedState = state;
-          }
-          delete otherWindow.__userChromeHotReloadPausedState;
-        }
-      }
-
-      if (inheritedState) {
-        startWatcher(
-          inheritedState.lastModifiedTimes,
-          inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff,
-          inheritedState.pendingChangedFiles
-        );
-      } else {
-        startWatcher();
-      }
-      debugLog("Watcher resumed", { restoredState: Boolean(inheritedState) });
-    },
-  };
+  const enabledPrefObserver = { observe: ensureWatcherOwnership };
+  const pausePrefObserver = { observe: ensureWatcherOwnership };
 
   function init() {
     const compatibility = checkCompatibility();
@@ -1951,43 +1911,12 @@
     window.__userChromeHotReloadYieldWatcher = yieldWatcher;
     window.addEventListener("beforeunload", cleanupWindow, { once: true });
 
-    // If a newly opened window becomes most recent, transfer watcher state
-    // from any existing owner before starting its own poller.
-    if (window === mostRecentWindow && !getPref("bool", PREF_PAUSED, false)) {
-      let inheritedState = window.__userChromeHotReloadPausedState || null;
-      delete window.__userChromeHotReloadPausedState;
-      for (const otherWindow of chromeWindows()) {
-        if (otherWindow === window || otherWindow.closed) {
-          continue;
-        }
-        const pausedState = otherWindow.__userChromeHotReloadPausedState;
-        if (pausedState) {
-          if (!inheritedState) {
-            inheritedState = pausedState;
-          }
-          delete otherWindow.__userChromeHotReloadPausedState;
-          continue;
-        }
-        if (typeof otherWindow.__userChromeHotReloadYieldWatcher !== "function") {
-          continue;
-        }
-        const state = otherWindow.__userChromeHotReloadYieldWatcher();
-        if (!inheritedState && state) {
-          inheritedState = state;
-        }
+    ensureWatcherOwnership();
+    window.addEventListener("focus", () => {
+      if (!watcherActive && pollTimer === null) {
+        ensureWatcherOwnership();
       }
-
-      if (inheritedState) {
-        startWatcher(
-          inheritedState.lastModifiedTimes,
-          inheritedState.initialScanComplete,
-          inheritedState.forceReloadOnHandoff,
-          inheritedState.pendingChangedFiles
-        );
-      } else {
-        startWatcher();
-      }
-    }
+    });
   }
 
   init();

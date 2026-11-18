@@ -57,6 +57,7 @@ function createHarness() {
   };
   const rebuildCalls = [];
   const registeredActors = [];
+  let mostRecentWindowOverride = null;
 
   const io = {
     async stat(path) {
@@ -189,7 +190,7 @@ function createHarness() {
         },
       },
       wm: {
-        getMostRecentWindow: () => windows.at(-1) ?? null,
+        getMostRecentWindow: () => mostRecentWindowOverride ?? windows.at(-1) ?? null,
         getEnumerator: () => {
           let index = 0;
           return {
@@ -397,6 +398,7 @@ function createHarness() {
     },
     rebuildCalls,
     registeredActors,
+    setMostRecentWindow(win) { mostRecentWindowOverride = win; },
     async runDebouncedReload() {
       const pending = [...timeouts.values()];
       assert.ok(pending.length > 0, "expected a pending debounced reload");
@@ -431,6 +433,31 @@ test("new most-recent window takes ownership without leaving a second poller", a
 
   harness.closeWindow(second);
   assert.equal(first.__userChromeHotReloadIsWatcherOwner, true);
+  assert.equal(harness.activePollers(), 1);
+});
+
+test("focusing a new window restores the watcher after a delayed handoff", async () => {
+  const harness = createHarness();
+  const first = harness.addWindow();
+  await harness.flushAsyncWork();
+  assert.equal(first.__userChromeHotReloadIsWatcherOwner, true);
+  assert.equal(harness.activePollers(), 1);
+
+  // Simulate the race where the old window is still reported as most recent
+  // while the new window's script runs, so its init cannot claim ownership.
+  harness.setMostRecentWindow(first);
+  const second = harness.addWindow();
+  await harness.flushAsyncWork();
+  assert.equal(second.__userChromeHotReloadIsWatcherOwner, undefined);
+  assert.equal(first.__userChromeHotReloadIsWatcherOwner, true);
+  assert.equal(harness.activePollers(), 1);
+
+  // Once the new window becomes current and receives focus, it takes over.
+  harness.setMostRecentWindow(second);
+  second.__listeners.get("focus")?.();
+  await harness.flushAsyncWork();
+  assert.equal(second.__userChromeHotReloadIsWatcherOwner, true);
+  assert.equal(first.__userChromeHotReloadIsWatcherOwner, false);
   assert.equal(harness.activePollers(), 1);
 });
 
