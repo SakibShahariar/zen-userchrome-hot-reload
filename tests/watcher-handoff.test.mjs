@@ -534,14 +534,17 @@ test("Sine rebuild uses the manager relocated to SineAPI", async () => {
     "Sine's relocated manager should still rebuild tracked styles");
 });
 
-test("content actor registers for web remote types", async () => {
+test("content actor is registered for untrusted web processes", async () => {
   const harness = createHarness();
   harness.addWindow();
   await harness.flushAsyncWork();
 
   const registration = harness.registeredActors.find(({ name }) => name === "UserChromeHotReload");
   assert.ok(registration, "expected the content actor to be registered");
-  assert.deepEqual(Array.from(registration.options.remoteTypes), ["web"]);
+  assert.equal(registration.options.safeForUntrustedWebProcess, true,
+    "web processes reject actors that are not marked safe for untrusted content");
+  assert.equal(registration.options.remoteTypes, undefined,
+    "restricting remote types would exclude in-process frames");
   assert.equal(registration.options.matchesTarget, undefined,
     "the obsolete matchesTarget option must not be used");
 });

@@ -1562,7 +1562,10 @@
           events: {},
         },
         allFrames: true,
-        remoteTypes: ["web"],
+        // Zen/Gecko rejects actors in web processes unless explicitly marked
+        // safe, even when remoteTypes would otherwise allow them. Leave
+        // remoteTypes unset so in-process frames are covered as well.
+        safeForUntrustedWebProcess: true,
         includeChrome: false,
         messageManagerGroups: ["browsers"],
       });
