@@ -121,7 +121,12 @@ function createHarness() {
     const popup = withAppMenu ? { appendChild(item) { item.isConnected = true; menuItems.set(item.id, item); } } : null;
     const document = {
       getElementById(id) {
-        if (id === "appMenu-popup") return popup;
+        // Zen's panel itself is not where visible app-menu items live.
+        if (id === "appMenu-mainView") {
+          return popup
+            ? { querySelector: (selector) => selector === ".panel-subview-body" ? popup : null }
+            : null;
+        }
         return menuItems.get(id) ?? null;
       },
       createXULElement() {

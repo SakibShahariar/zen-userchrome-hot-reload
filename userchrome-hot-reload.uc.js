@@ -1491,8 +1491,13 @@
 
   function setupReloadMenuItem() {
     const doc = window.document;
-    const popup = doc.getElementById("appMenu-popup");
-    if (!popup || typeof doc.createXULElement !== "function") {
+    // Zen's appMenu-popup only holds a panelmultiview; visible items live in
+    // the main view's subview body. Appending directly to the panel renders
+    // nothing, so use the subview body when it is available.
+    const mainView = doc.getElementById("appMenu-mainView");
+    const popup = mainView?.querySelector(".panel-subview-body") ??
+      mainView ?? doc.getElementById("appMenu-popup");
+    if (!popup || typeof popup.appendChild !== "function" || typeof doc.createXULElement !== "function") {
       debugLog("App menu unavailable; use the configured hotkey for manual reloads");
       return;
     }
@@ -1508,21 +1513,24 @@
     doc.getElementById(SETTINGS_IMPORT_MENU_ITEM_ID)?.remove();
     reloadMenuSeparator = doc.createXULElement("menuseparator");
     reloadMenuSeparator.id = RELOAD_MENU_SEPARATOR_ID;
-    reloadMenuItem = doc.createXULElement("menuitem");
+    reloadMenuItem = doc.createXULElement("toolbarbutton");
+    reloadMenuItem.setAttribute("class", "subviewbutton");
     reloadMenuItem.id = RELOAD_MENU_ITEM_ID;
     reloadMenuItem.setAttribute("label", "Reload stylesheets now");
     reloadMenuItem.setAttribute("tooltiptext", "Reload the enabled stylesheets immediately");
     reloadMenuCommandHandler = () => { void reloadNow(); };
     reloadMenuItem.addEventListener("command", reloadMenuCommandHandler);
 
-    exportSettingsMenuItem = doc.createXULElement("menuitem");
+    exportSettingsMenuItem = doc.createXULElement("toolbarbutton");
+    exportSettingsMenuItem.setAttribute("class", "subviewbutton");
     exportSettingsMenuItem.id = SETTINGS_EXPORT_MENU_ITEM_ID;
     exportSettingsMenuItem.setAttribute("label", "Export hot-reload settings…");
     exportSettingsMenuItem.setAttribute("tooltiptext", "Save this mod's settings to a versioned JSON file");
     exportSettingsCommandHandler = () => { void exportSettings(); };
     exportSettingsMenuItem.addEventListener("command", exportSettingsCommandHandler);
 
-    importSettingsMenuItem = doc.createXULElement("menuitem");
+    importSettingsMenuItem = doc.createXULElement("toolbarbutton");
+    importSettingsMenuItem.setAttribute("class", "subviewbutton");
     importSettingsMenuItem.id = SETTINGS_IMPORT_MENU_ITEM_ID;
     importSettingsMenuItem.setAttribute("label", "Import hot-reload settings…");
     importSettingsMenuItem.setAttribute("tooltiptext", "Import supported settings from a versioned JSON file");
