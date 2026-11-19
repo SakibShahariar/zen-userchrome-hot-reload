@@ -1495,10 +1495,15 @@
     // the main view's subview body. Appending directly to the panel renders
     // nothing, so use the subview body when it is available.
     const mainView = doc.getElementById("appMenu-mainView");
-    const popup = mainView?.querySelector(".panel-subview-body") ??
-      mainView ?? doc.getElementById("appMenu-popup");
+    const popup = mainView?.querySelector(".panel-subview-body") ?? mainView;
     if (!popup || typeof popup.appendChild !== "function" || typeof doc.createXULElement !== "function") {
-      debugLog("App menu unavailable; use the configured hotkey for manual reloads");
+      // The main view is cloned from a <template> when the menu first opens,
+      // so it does not exist at window-load time. Retry on popupshowing.
+      const panel = doc.getElementById("appMenu-popup");
+      if (panel && typeof panel.addEventListener === "function") {
+        panel.addEventListener("popupshowing", () => { setupReloadMenuItem(); });
+      }
+      debugLog("App menu view unavailable; retrying when the menu opens");
       return;
     }
     window.__userChromeHotReloadUpdateStatus = updateReloadMenuItem;

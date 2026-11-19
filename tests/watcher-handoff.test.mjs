@@ -116,17 +116,26 @@ function createHarness() {
     },
   };
 
-  function addWindow({ withAppMenu = false } = {}) {
+  function addWindow({ withAppMenu = false, lazyAppMenu = false } = {}) {
     const listeners = new Map();
+    const panelListeners = new Map();
+    let appMenuViewReady = !lazyAppMenu;
     const popup = withAppMenu ? { appendChild(item) { item.isConnected = true; menuItems.set(item.id, item); } } : null;
+    const panel = withAppMenu
+      ? {
+          addEventListener(name, callback) { panelListeners.set(name, callback); },
+          removeEventListener(name) { panelListeners.delete(name); },
+        }
+      : null;
     const document = {
       getElementById(id) {
-        // Zen's panel itself is not where visible app-menu items live.
+        // Zen's main view is cloned from a template when the menu opens.
         if (id === "appMenu-mainView") {
-          return popup
+          return appMenuViewReady && popup
             ? { querySelector: (selector) => selector === ".panel-subview-body" ? popup : null }
             : null;
         }
+        if (id === "appMenu-popup") return panel;
         return menuItems.get(id) ?? null;
       },
       createXULElement() {
@@ -159,6 +168,10 @@ function createHarness() {
       },
       gBrowser: { tabs: [] },
       __listeners: listeners,
+    };
+    win.__showAppMenu = () => {
+      appMenuViewReady = true;
+      panelListeners.get("popupshowing")?.();
     };
     windows.push(win);
 
@@ -375,6 +388,7 @@ function createHarness() {
       assert.equal(typeof handler, "function");
       handler();
     },
+    showAppMenu(win) { win.__showAppMenu?.(); },
     addSpecialEntry(path, type) {
       children.push(path);
       specialEntries.set(path, type);
@@ -1021,6 +1035,19 @@ test("settings import rolls back earlier preference writes if a later write fail
 
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
   assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
+});
+
+test("app-menu actions are added when Zen's templated menu first opens", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow({ withAppMenu: true, lazyAppMenu: true });
+  await harness.flushAsyncWork();
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), false);
+
+  harness.showAppMenu(win);
+  await harness.flushAsyncWork();
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), true);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), true);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), true);
 });
 
 test("settings app-menu actions are removed when the owning window closes", async () => {
