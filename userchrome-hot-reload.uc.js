@@ -63,6 +63,7 @@
   let importSettingsMenuItem = null;
   let exportSettingsCommandHandler = null;
   let importSettingsCommandHandler = null;
+  let menuContainer = null;
 
   let reloadInProgress = false;
   let reloadRequested = false;
@@ -1516,6 +1517,10 @@
     doc.getElementById(RELOAD_MENU_SEPARATOR_ID)?.remove();
     doc.getElementById(SETTINGS_EXPORT_MENU_ITEM_ID)?.remove();
     doc.getElementById(SETTINGS_IMPORT_MENU_ITEM_ID)?.remove();
+    menuContainer?.remove();
+    menuContainer = doc.createXULElement("vbox");
+    menuContainer.id = "zen-userchrome-hot-reload-menu-container";
+    popup.appendChild(menuContainer);
     reloadMenuSeparator = doc.createXULElement("menuseparator");
     reloadMenuSeparator.id = RELOAD_MENU_SEPARATOR_ID;
     reloadMenuItem = doc.createXULElement("toolbarbutton");
@@ -1542,10 +1547,10 @@
     importSettingsCommandHandler = () => { void importSettings(); };
     importSettingsMenuItem.addEventListener("command", importSettingsCommandHandler);
 
-    popup.appendChild(reloadMenuSeparator);
-    popup.appendChild(reloadMenuItem);
-    popup.appendChild(exportSettingsMenuItem);
-    popup.appendChild(importSettingsMenuItem);
+    menuContainer.appendChild(reloadMenuSeparator);
+    menuContainer.appendChild(reloadMenuItem);
+    menuContainer.appendChild(exportSettingsMenuItem);
+    menuContainer.appendChild(importSettingsMenuItem);
     updateReloadMenuItem();
   }
 
@@ -1557,6 +1562,8 @@
     reloadMenuSeparator?.remove();
     exportSettingsMenuItem?.remove();
     importSettingsMenuItem?.remove();
+    menuContainer?.remove();
+    menuContainer = null;
     reloadMenuItem = null;
     reloadMenuSeparator = null;
     reloadMenuCommandHandler = null;

@@ -145,6 +145,12 @@ function createHarness() {
           isConnected: false,
           setAttribute() {},
           removeAttribute() {},
+          appendChild(child) {
+            this.children.push(child);
+            child.isConnected = true;
+            if (child.id) menuItems.set(child.id, child);
+          },
+          children: [],
           addEventListener(name, callback) { itemListeners.set(name, callback); },
           removeEventListener(name, callback) { if (itemListeners.get(name) === callback) itemListeners.delete(name); },
           remove() { this.isConnected = false; menuItems.delete(this.id); },
