@@ -1440,7 +1440,9 @@
           throw new Error("The Zen file picker API is unavailable");
         }
         const picker = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-        picker.init(window, title, mode);
+        // Recent Gecko versions expect a BrowsingContext as the parent; older
+        // ones accepted a DOM window directly.
+        picker.init(window.browsingContext ?? window, title, mode);
         picker.appendFilter("JSON files", "*.json");
         if (mode === Ci.nsIFilePicker.modeSave) {
           picker.defaultString = "zen-userchrome-hot-reload-settings.json";

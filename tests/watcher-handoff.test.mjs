@@ -59,6 +59,7 @@ function createHarness() {
   const registeredActors = [];
   const warnings = [];
   const failingStats = new Set();
+  const pickerInitArgs = [];
   let mostRecentWindowOverride = null;
 
   const io = {
@@ -160,6 +161,7 @@ function createHarness() {
     };
     const win = {
       closed: false,
+      browsingContext: { id: "test-browsing-context" },
       document,
       addEventListener(name, callback) {
         listeners.set(name, callback);
@@ -266,7 +268,7 @@ function createHarness() {
         "@mozilla.org/filepicker;1": {
           createInstance() {
             return {
-              init() {},
+              init(...args) { pickerInitArgs.push(args); },
               appendFilter() {},
               defaultString: "",
               file: { path: filePickerPath },
@@ -432,6 +434,7 @@ function createHarness() {
     rebuildCalls,
     registeredActors,
     warnings,
+    pickerInitArgs,
     failStatFor(path) { failingStats.add(path); },
     setMostRecentWindow(win) { mostRecentWindowOverride = win; },
     async runDebouncedReload() {
@@ -906,6 +909,19 @@ test("large nested CSS trees reuse directory listings while refreshing file meta
     "the cache should behave consistently across the full 500-file fixture");
   assert.equal(harness.timeouts.size, 0,
     "an unchanged large tree should not trigger reloads");
+});
+
+test("settings file picker is initialized with the window's browsing context", async () => {
+  const harness = createHarness();
+  const win = harness.addWindow({ withAppMenu: true });
+  await harness.flushAsyncWork();
+
+  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
+  await harness.flushAsyncWork();
+
+  assert.equal(harness.pickerInitArgs.length, 1, "expected one file picker initialization");
+  assert.equal(harness.pickerInitArgs[0][0], win.browsingContext,
+    "recent Gecko versions require a BrowsingContext for nsIFilePicker.init");
 });
 
 test("settings export writes a versioned snapshot of supported preferences", async () => {
