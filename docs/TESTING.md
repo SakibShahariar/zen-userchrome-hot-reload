@@ -44,17 +44,6 @@ Run these checks in Zen Browser before a release or after changes to the watcher
 - Record which checks require a real Zen session; do not report those as passed when they were not run.
 
 
-## Settings import/export
-
-- [ ] Export settings from the Zen app menu and verify schema version 1 and supported preference keys.
-- [ ] Import a valid partial file and confirm omitted preferences remain unchanged.
-- [ ] Try an unsupported schema version, wrong preference type, malformed watch-path array, and invalid numeric value; confirm no settings are partially changed.
-- [ ] Cancel the file picker and decline the import confirmation; confirm settings remain unchanged.
-- [ ] Confirm export/import actions are removed when the owning browser window closes.
-
-- [ ] Simulate a preference write failure during import and confirm all earlier preference writes are rolled back.
-
-
 ## Recording live compatibility evidence
 
 After completing the manual checks in a real Zen + Sine environment, update [COMPATIBILITY.md](COMPATIBILITY.md) with the exact Zen build, OS/architecture, Sine version, tested commit SHA, date, and Pass/Fail result for each required check. Do not mark an environment supported from CI results alone.

@@ -109,7 +109,7 @@ Persistent repository-specific record of commit-level CI checks and red-cross in
 
 ## Remaining verification
 
-- Settings import/export (#50): live Zen app-menu/file-picker smoke test remains; CI validates the mocked workflow only.
+- Settings import/export (#50): feature removed at the repository owner's direction; issue closed as not planned. Historical red/green results above are preserved.
 - Cache invalidation (#28): real filesystem replacement behavior and target-environment smoke test remain.
 - Watch-root security (#56): actual symlink/junction behavior and Sine runtime implications remain.
 - Native watcher (#13): Category E owner decision pending.

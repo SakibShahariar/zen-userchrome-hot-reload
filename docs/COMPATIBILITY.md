@@ -31,7 +31,7 @@ The following checks were exercised manually on Zen 1.24.2b (build `202611111223
 - **Window lifecycle:** passed with two windows open; ownership handoff and focused-window recovery kept one watcher running.
 - **Symlink boundary:** a real symlink loop stayed bounded and the skipped path was reported in the Browser Console.
 
-Preference-handling details, native file-picker settings import/export, disable/uninstall cleanup, and other Zen/OS/Sine combinations remain **Not tested**. No environment row is marked verified until every required check passes.
+Preference-handling details, disable/uninstall cleanup, and other Zen/OS/Sine combinations remain **Not tested**. No environment row is marked verified until every required check passes.
 
 ## Required checks for each environment
 
@@ -47,7 +47,7 @@ Record Pass, Fail, or Not tested for each item. A row is considered verified onl
 | Content stylesheet reload | Verify eligible open documents and frames refresh correctly. |
 | Nested/custom roots | Verify absolute custom roots, nested-directory preference, exclusions, and invalid-path fallback. |
 | Sine rebuild | Change a declared enabled Sine stylesheet and confirm style rebuilding without unintended mod-script reload. |
-| App-menu actions | Verify manual reload, settings export/import, native file-picker flows, cancellation, and confirmation. |
+| App-menu actions | Verify manual reload and the status label/tooltip in active, paused, disabled, and unavailable states. |
 | Disable/uninstall | Disable or remove the mod; confirm timers, observers, menu items, and window references are cleaned up. |
 
 ## Per-environment evidence template

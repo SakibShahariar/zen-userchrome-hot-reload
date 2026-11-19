@@ -30,12 +30,7 @@ function createHarness() {
   const directoryReadCounts = new Map();
   const statRequests = new Set();
   const fileStatCounts = new Map();
-  const fileStore = new Map();
   const menuItems = new Map();
-  let filePickerPath = "/tmp/zen-userchrome-hot-reload-settings.json";
-  let filePickerResult = 0;
-  let confirmImport = true;
-  let failNextPreferenceWriteFor = null;
   const specialEntries = new Map();
   let pathExpandingCycleRoot = null;
   let cssModified = 1;
@@ -59,7 +54,6 @@ function createHarness() {
   const registeredActors = [];
   const warnings = [];
   const failingStats = new Set();
-  const pickerInitArgs = [];
   let mostRecentWindowOverride = null;
 
   const io = {
@@ -101,12 +95,8 @@ function createHarness() {
       return cssTexts.get(path);
     },
     async readJSON(path) {
-      if (fileStore.has(path)) return structuredClone(fileStore.get(path));
       if (path !== "/profile/chrome/sine-mods/mods.json") throw new Error("Unexpected JSON path: " + path);
       return structuredClone(sineModsData);
-    },
-    async writeJSON(path, value) {
-      fileStore.set(path, structuredClone(value));
     },
     async getChildren(path) {
       directoryReadCounts.set(path, (directoryReadCounts.get(path) ?? 0) + 1);
@@ -190,18 +180,10 @@ function createHarness() {
         getStringPref: (name) => prefValues.get(name),
         getIntPref: (name) => prefValues.get(name),
         setBoolPref(name, value) {
-          if (failNextPreferenceWriteFor === name) {
-            failNextPreferenceWriteFor = null;
-            throw new Error("Simulated preference write failure");
-          }
           prefValues.set(name, value);
           for (const observer of prefObservers.get(name) ?? []) observer.observe();
         },
         setStringPref(name, value) {
-          if (failNextPreferenceWriteFor === name) {
-            failNextPreferenceWriteFor = null;
-            throw new Error("Simulated preference write failure");
-          }
           prefValues.set(name, value);
           for (const observer of prefObservers.get(name) ?? []) observer.observe();
         },
@@ -242,7 +224,6 @@ function createHarness() {
         },
       },
       obs: { notifyObservers() {} },
-      prompt: { confirm() { return confirmImport; } },
     };
 
     const context = vm.createContext({
@@ -262,20 +243,6 @@ function createHarness() {
       },
       Ci: {
         nsIFileURL: {},
-        nsIFilePicker: { modeOpen: 0, modeSave: 1, returnOK: 0, returnCancel: 1, returnReplace: 2 },
-      },
-      Cc: {
-        "@mozilla.org/filepicker;1": {
-          createInstance() {
-            return {
-              init(...args) { pickerInitArgs.push(args); },
-              appendFilter() {},
-              defaultString: "",
-              file: { path: filePickerPath },
-              open(callback) { callback(filePickerResult); },
-            };
-          },
-        },
       },
       setInterval(callback) {
         const id = nextTimerId++;
@@ -382,11 +349,6 @@ function createHarness() {
     directoryReadTotal: () => [...directoryReadCounts.values()].reduce((total, count) => total + count, 0),
     wasStatRequested: (path) => statRequests.has(path),
     fileStatCount: (path) => fileStatCounts.get(path) ?? 0,
-    configureFilePicker({ path = filePickerPath, result = 0 } = {}) { filePickerPath = path; filePickerResult = result; },
-    setImportedSettings(path, payload) { fileStore.set(path, structuredClone(payload)); },
-    exportedSettings(path = filePickerPath) { return structuredClone(fileStore.get(path)); },
-    setImportConfirmation(value) { confirmImport = value; },
-    failNextPreferenceWrite(name) { failNextPreferenceWriteFor = name; },
     getPreference(name) { return prefValues.get(name); },
     hasMenuItem(id) { return menuItems.has(id); },
     triggerMenuItem(id) {
@@ -434,7 +396,6 @@ function createHarness() {
     rebuildCalls,
     registeredActors,
     warnings,
-    pickerInitArgs,
     failStatFor(path) { failingStats.add(path); },
     setMostRecentWindow(win) { mostRecentWindowOverride = win; },
     async runDebouncedReload() {
@@ -911,199 +872,27 @@ test("large nested CSS trees reuse directory listings while refreshing file meta
     "an unchanged large tree should not trigger reloads");
 });
 
-test("settings file picker is initialized with the window's browsing context", async () => {
-  const harness = createHarness();
-  const win = harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.pickerInitArgs.length, 1, "expected one file picker initialization");
-  assert.equal(harness.pickerInitArgs[0][0], win.browsingContext,
-    "recent Gecko versions require a BrowsingContext for nsIFilePicker.init");
-});
-
-test("settings export writes a versioned snapshot of supported preferences", async () => {
-  const harness = createHarness();
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "750");
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
-  await harness.flushAsyncWork();
-
-  const payload = harness.exportedSettings();
-  assert.equal(payload.format, "zen-userchrome-hot-reload-settings");
-  assert.equal(payload.schemaVersion, 1);
-  assert.equal(payload.preferences["poll-interval-ms"], "750");
-  assert.equal(Object.keys(payload.preferences).length, 13);
-});
-
-test("settings import applies only included known preferences after validation", async () => {
-  const harness = createHarness();
-  const path = "/tmp/import-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 1,
-    preferences: { "poll-interval-ms": "900", "reload-chrome": true },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
-  harness.setPref("extensions.zen-userchrome-hot-reload.reload-content", false);
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "900");
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), true);
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-content"), false);
-});
-
-test("invalid numeric settings are rejected without partially applying an import", async () => {
-  const harness = createHarness();
-  const path = "/tmp/invalid-numeric-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 1,
-    preferences: { "poll-interval-ms": "not-a-number", "reload-chrome": true },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
-});
-
-test("cancelled settings file selection leaves settings and exports untouched", async () => {
-  const harness = createHarness();
-  harness.configureFilePicker({ result: 1 });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-export-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.exportedSettings(), undefined);
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
-});
-
-test("declining settings import confirmation leaves preferences unchanged", async () => {
-  const harness = createHarness();
-  const path = "/tmp/declined-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 1,
-    preferences: { "poll-interval-ms": "900" },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.setImportConfirmation(false);
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
-});
-
-test("invalid watch-path arrays reject the entire settings import before applying other keys", async () => {
-  const harness = createHarness();
-  const path = "/tmp/invalid-watch-path-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 1,
-    preferences: { "poll-interval-ms": "900", "watch-path": "[null]" },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
-});
-
-test("settings import rolls back earlier preference writes if a later write fails", async () => {
-  const harness = createHarness();
-  const path = "/tmp/rollback-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 1,
-    preferences: { "poll-interval-ms": "900", "reload-chrome": true },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.setPref("extensions.zen-userchrome-hot-reload.reload-chrome", false);
-  harness.failNextPreferenceWrite("extensions.zen-userchrome-hot-reload.reload-chrome");
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.reload-chrome"), false);
-});
-
-test("app-menu actions are added when Zen's templated menu first opens", async () => {
+test("app-menu action is added when Zen's templated menu first opens", async () => {
   const harness = createHarness();
   const win = harness.addWindow({ withAppMenu: true, lazyAppMenu: true });
   await harness.flushAsyncWork();
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), false);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), false);
 
   harness.showAppMenu(win);
   await harness.flushAsyncWork();
   assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), true);
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), true);
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), true);
 });
 
-test("settings app-menu actions are removed when the owning window closes", async () => {
+test("app-menu action is removed when the owning window closes", async () => {
   const harness = createHarness();
   const win = harness.addWindow({ withAppMenu: true });
   await harness.flushAsyncWork();
 
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), true);
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), true);
+  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), true);
 
   harness.closeWindow(win);
 
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-export-settings"), false);
-  assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-import-settings"), false);
   assert.equal(harness.hasMenuItem("zen-userchrome-hot-reload-reload-now"), false);
-});
-
-test("unsupported settings schema is rejected without changing preferences", async () => {
-  const harness = createHarness();
-  const path = "/tmp/invalid-settings.json";
-  harness.setImportedSettings(path, {
-    format: "zen-userchrome-hot-reload-settings",
-    schemaVersion: 99,
-    preferences: { "poll-interval-ms": "900" },
-  });
-  harness.setPref("extensions.zen-userchrome-hot-reload.poll-interval-ms", "500");
-  harness.configureFilePicker({ path });
-  harness.addWindow({ withAppMenu: true });
-  await harness.flushAsyncWork();
-
-  harness.triggerMenuItem("zen-userchrome-hot-reload-import-settings");
-  await harness.flushAsyncWork();
-
-  assert.equal(harness.getPreference("extensions.zen-userchrome-hot-reload.poll-interval-ms"), "500");
 });
 
 test("a legacy single custom watch path remains supported", async () => {

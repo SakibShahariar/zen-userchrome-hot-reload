@@ -11,7 +11,6 @@ Initial release candidate.
 - Configurable watch roots, nested directories, exclusions, polling, and debounce.
 - Optional Sine-managed style rebuilds.
 - Manual reload from the Zen app menu and keyboard shortcut.
-- Versioned JSON settings export/import.
 - Local diagnostics and automated regression tests.
 
 ### Known limitations before publication

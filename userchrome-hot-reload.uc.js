@@ -15,33 +15,11 @@
   const PREF_TOAST = "extensions.zen-userchrome-hot-reload.toast";
   const PREF_DEBUG = "extensions.zen-userchrome-hot-reload.debug-logging";
   const RELOAD_MENU_ITEM_ID = "zen-userchrome-hot-reload-reload-now";
-  const RELOAD_MENU_SEPARATOR_ID = "zen-userchrome-hot-reload-reload-now-separator";
   const PREF_HOTKEY = "extensions.zen-userchrome-hot-reload.hotkey";
   const PREF_NESTED = "extensions.zen-userchrome-hot-reload.watch-nested-directories";
   const PREF_EXCLUDED_DIRS = "extensions.zen-userchrome-hot-reload.excluded-dirs";
   const PREF_ENABLED = "extensions.zen-userchrome-hot-reload.enabled";
   const PREF_PAUSED = "extensions.zen-userchrome-hot-reload.paused";
-  const SETTINGS_FORMAT = "zen-userchrome-hot-reload-settings";
-  const SETTINGS_SCHEMA_VERSION = 1;
-  const SETTINGS_EXPORT_MENU_ITEM_ID = "zen-userchrome-hot-reload-export-settings";
-  const SETTINGS_IMPORT_MENU_ITEM_ID = "zen-userchrome-hot-reload-import-settings";
-  const SETTINGS_DEFINITIONS = [
-    { key: "enabled", pref: PREF_ENABLED, type: "bool", fallback: true },
-    { key: "paused", pref: PREF_PAUSED, type: "bool", fallback: false },
-    { key: "reload-chrome", pref: PREF_RELOAD_CHROME, type: "bool", fallback: true },
-    { key: "reload-content", pref: PREF_RELOAD_CONTENT, type: "bool", fallback: true },
-    { key: "reload-sine-mods", pref: PREF_SINE, type: "bool", fallback: true },
-    { key: "watch-path", pref: PREF_PATH, type: "string", fallback: "" },
-    { key: "poll-interval-ms", pref: PREF_INTERVAL, type: "string", fallback: "500" },
-    { key: "reload-debounce-ms", pref: PREF_DEBOUNCE, type: "string", fallback: "300" },
-    { key: "watch-nested-directories", pref: PREF_NESTED, type: "bool", fallback: false },
-    { key: "excluded-dirs", pref: PREF_EXCLUDED_DIRS, type: "string", fallback: "sine-mods,JS,utils" },
-    { key: "hotkey", pref: PREF_HOTKEY, type: "string", fallback: "Ctrl+Shift+F5" },
-    { key: "debug-logging", pref: PREF_DEBUG, type: "bool", fallback: false },
-    { key: "toast", pref: PREF_TOAST, type: "bool", fallback: true },
-  ];
-
-
   const ACTOR_NAME = "UserChromeHotReload";
   const ACTOR_MODULE =
     "chrome://sine/content/zen-userchrome-hot-reload/hot-reload-content.sys.mjs";
@@ -57,12 +35,7 @@
   let reloadMenuItem = null;
   let lastReloadAt = null;
   let lastReloadStatus = "Never";
-  let reloadMenuSeparator = null;
   let reloadMenuCommandHandler = null;
-  let exportSettingsMenuItem = null;
-  let importSettingsMenuItem = null;
-  let exportSettingsCommandHandler = null;
-  let importSettingsCommandHandler = null;
   let menuContainer = null;
 
   let reloadInProgress = false;
@@ -1351,147 +1324,6 @@
     notifyReloadStatusChange();
   }
 
-  function createSettingsExportPayload() {
-    const preferences = {};
-    for (const definition of SETTINGS_DEFINITIONS) {
-      preferences[definition.key] = getPref(definition.type, definition.pref, definition.fallback);
-    }
-    return {
-      format: SETTINGS_FORMAT,
-      schemaVersion: SETTINGS_SCHEMA_VERSION,
-      exportedAt: Date.now(),
-      preferences,
-    };
-  }
-
-  function validateSettingsImportPayload(payload) {
-    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      throw new Error("Settings file must contain a JSON object");
-    }
-    if (payload.format !== SETTINGS_FORMAT || payload.schemaVersion !== SETTINGS_SCHEMA_VERSION) {
-      throw new Error("Unsupported settings file format or schema version");
-    }
-    if (!payload.preferences || typeof payload.preferences !== "object" || Array.isArray(payload.preferences)) {
-      throw new Error("Settings file is missing its preferences object");
-    }
-    const definitions = new Map(SETTINGS_DEFINITIONS.map((item) => [item.key, item]));
-    const validated = [];
-    for (const [key, value] of Object.entries(payload.preferences)) {
-      const definition = definitions.get(key);
-      if (!definition) continue;
-      if (definition.type === "bool") {
-        if (typeof value !== "boolean") throw new Error("Invalid boolean setting: " + key);
-      } else {
-        if (typeof value !== "string" || value.length > 8192) {
-          throw new Error("Invalid string setting: " + key);
-        }
-        if ((key === "poll-interval-ms" || key === "reload-debounce-ms") &&
-            value !== "" && !/^\d+$/.test(value)) {
-          throw new Error("Invalid numeric setting: " + key);
-        }
-        if (key === "watch-path" && value.trim()) {
-          let roots = [value.trim()];
-          if (value.trim().startsWith("[")) {
-            try { roots = JSON.parse(value); } catch (e) { throw new Error("Invalid watch-path JSON array"); }
-          }
-          const absolute = (path) => typeof path === "string" && (
-            path.trim().startsWith("/") || /^[A-Za-z]:[\\/]/.test(path.trim()) || path.trim().startsWith("\\\\")
-          );
-          if (!Array.isArray(roots) || roots.length === 0 || !roots.every(absolute)) {
-            throw new Error("Watch paths must be absolute paths");
-          }
-        }
-      }
-      validated.push({ definition, value });
-    }
-    if (validated.length === 0) throw new Error("Settings file contains no supported preferences");
-    return validated;
-  }
-
-  function applySettingsImport(validated) {
-    const previous = validated.map(({ definition }) => ({
-      definition,
-      hadUserValue: Services.prefs.prefHasUserValue(definition.pref),
-      value: getPref(definition.type, definition.pref, definition.fallback),
-    }));
-    try {
-      for (const { definition, value } of validated) {
-        if (definition.type === "bool") Services.prefs.setBoolPref(definition.pref, value);
-        else Services.prefs.setStringPref(definition.pref, value);
-      }
-    } catch (e) {
-      for (const item of previous) {
-        try {
-          if (!item.hadUserValue) Services.prefs.clearUserPref(item.definition.pref);
-          else if (item.definition.type === "bool") Services.prefs.setBoolPref(item.definition.pref, item.value);
-          else Services.prefs.setStringPref(item.definition.pref, item.value);
-        } catch (rollbackError) {
-          console.error("[UserChrome Hot-Reload] Settings import rollback failed:", rollbackError);
-        }
-      }
-      throw e;
-    }
-  }
-
-  function chooseSettingsFile(mode, title) {
-    return new Promise((resolve, reject) => {
-      try {
-        if (typeof Cc === "undefined" || typeof Ci === "undefined" || !Ci.nsIFilePicker) {
-          throw new Error("The Zen file picker API is unavailable");
-        }
-        const picker = Cc["@mozilla.org/filepicker;1"].createInstance(Ci.nsIFilePicker);
-        // Recent Gecko versions expect a BrowsingContext as the parent; older
-        // ones accepted a DOM window directly.
-        picker.init(window.browsingContext ?? window, title, mode);
-        picker.appendFilter("JSON files", "*.json");
-        if (mode === Ci.nsIFilePicker.modeSave) {
-          picker.defaultString = "zen-userchrome-hot-reload-settings.json";
-        }
-        picker.open((result) => {
-          if (result === Ci.nsIFilePicker.returnOK ||
-              (Ci.nsIFilePicker.returnReplace !== undefined && result === Ci.nsIFilePicker.returnReplace)) {
-            resolve(picker.file);
-          } else {
-            resolve(null);
-          }
-        });
-      } catch (e) {
-        reject(e);
-      }
-    });
-  }
-
-  async function exportSettings() {
-    try {
-      const file = await chooseSettingsFile(Ci.nsIFilePicker.modeSave, "Export UserChrome Hot-Reload settings");
-      if (!file) return;
-      await IOUtils.writeJSON(file.path, createSettingsExportPayload());
-      console.info("[UserChrome Hot-Reload] Settings exported successfully.");
-    } catch (e) {
-      console.error("[UserChrome Hot-Reload] Could not export settings:", e);
-    }
-  }
-
-  async function importSettings() {
-    try {
-      const file = await chooseSettingsFile(Ci.nsIFilePicker.modeOpen, "Import UserChrome Hot-Reload settings");
-      if (!file) return;
-      const validated = validateSettingsImportPayload(await IOUtils.readJSON(file.path));
-      if (typeof Services.prompt?.confirm !== "function") {
-        throw new Error("The confirmation dialog API is unavailable");
-      }
-      if (!Services.prompt.confirm(
-        window,
-        "Import UserChrome Hot-Reload settings",
-        "Replace " + validated.length + " setting(s) from this file? Omitted settings will remain unchanged."
-      )) return;
-      applySettingsImport(validated);
-      console.info("[UserChrome Hot-Reload] Settings imported successfully.");
-    } catch (e) {
-      console.error("[UserChrome Hot-Reload] Could not import settings:", e);
-    }
-  }
-
   function setupReloadMenuItem() {
     const doc = window.document;
     // Zen's appMenu-popup only holds a panelmultiview; visible items live in
@@ -1510,21 +1342,16 @@
       return;
     }
     window.__userChromeHotReloadUpdateStatus = updateReloadMenuItem;
-    if (reloadMenuItem?.isConnected && exportSettingsMenuItem?.isConnected && importSettingsMenuItem?.isConnected) {
+    if (reloadMenuItem?.isConnected) {
       updateReloadMenuItem();
       return;
     }
 
     doc.getElementById(RELOAD_MENU_ITEM_ID)?.remove();
-    doc.getElementById(RELOAD_MENU_SEPARATOR_ID)?.remove();
-    doc.getElementById(SETTINGS_EXPORT_MENU_ITEM_ID)?.remove();
-    doc.getElementById(SETTINGS_IMPORT_MENU_ITEM_ID)?.remove();
     menuContainer?.remove();
     menuContainer = doc.createXULElement("vbox");
     menuContainer.id = "zen-userchrome-hot-reload-menu-container";
     popup.appendChild(menuContainer);
-    reloadMenuSeparator = doc.createXULElement("menuseparator");
-    reloadMenuSeparator.id = RELOAD_MENU_SEPARATOR_ID;
     reloadMenuItem = doc.createXULElement("toolbarbutton");
     reloadMenuItem.setAttribute("class", "subviewbutton");
     reloadMenuItem.id = RELOAD_MENU_ITEM_ID;
@@ -1533,46 +1360,17 @@
     reloadMenuCommandHandler = () => { void reloadNow(); };
     reloadMenuItem.addEventListener("command", reloadMenuCommandHandler);
 
-    exportSettingsMenuItem = doc.createXULElement("toolbarbutton");
-    exportSettingsMenuItem.setAttribute("class", "subviewbutton");
-    exportSettingsMenuItem.id = SETTINGS_EXPORT_MENU_ITEM_ID;
-    exportSettingsMenuItem.setAttribute("label", "Export hot-reload settings…");
-    exportSettingsMenuItem.setAttribute("tooltiptext", "Save this mod's settings to a versioned JSON file");
-    exportSettingsCommandHandler = () => { void exportSettings(); };
-    exportSettingsMenuItem.addEventListener("command", exportSettingsCommandHandler);
-
-    importSettingsMenuItem = doc.createXULElement("toolbarbutton");
-    importSettingsMenuItem.setAttribute("class", "subviewbutton");
-    importSettingsMenuItem.id = SETTINGS_IMPORT_MENU_ITEM_ID;
-    importSettingsMenuItem.setAttribute("label", "Import hot-reload settings…");
-    importSettingsMenuItem.setAttribute("tooltiptext", "Import supported settings from a versioned JSON file");
-    importSettingsCommandHandler = () => { void importSettings(); };
-    importSettingsMenuItem.addEventListener("command", importSettingsCommandHandler);
-
-    menuContainer.appendChild(reloadMenuSeparator);
     menuContainer.appendChild(reloadMenuItem);
-    menuContainer.appendChild(exportSettingsMenuItem);
-    menuContainer.appendChild(importSettingsMenuItem);
     updateReloadMenuItem();
   }
 
   function removeReloadMenuItem() {
     if (reloadMenuItem && reloadMenuCommandHandler) reloadMenuItem.removeEventListener("command", reloadMenuCommandHandler);
-    if (exportSettingsMenuItem && exportSettingsCommandHandler) exportSettingsMenuItem.removeEventListener("command", exportSettingsCommandHandler);
-    if (importSettingsMenuItem && importSettingsCommandHandler) importSettingsMenuItem.removeEventListener("command", importSettingsCommandHandler);
     reloadMenuItem?.remove();
-    reloadMenuSeparator?.remove();
-    exportSettingsMenuItem?.remove();
-    importSettingsMenuItem?.remove();
     menuContainer?.remove();
     menuContainer = null;
     reloadMenuItem = null;
-    reloadMenuSeparator = null;
     reloadMenuCommandHandler = null;
-    exportSettingsMenuItem = null;
-    importSettingsMenuItem = null;
-    exportSettingsCommandHandler = null;
-    importSettingsCommandHandler = null;
     if (window.__userChromeHotReloadUpdateStatus === updateReloadMenuItem) delete window.__userChromeHotReloadUpdateStatus;
   }
 
